@@ -86,16 +86,37 @@ with col_esquerda:
 
     st.markdown("---")
     st.subheader("📅 Filtro de Destaques")
-    anos_disponiveis = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027]
-    anos_selecionados = st.multiselect(
-        "Selecione os anos alvo para envelopar nas caixas estruturadas:",
-        options=anos_disponiveis,
-        default=[2024, 2025, 2026]
-    )
+    
+    col_anos1, col_anos2 = st.columns([2, 1])
+    
+    with col_anos1:
+        anos_disponiveis = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027]
+        anos_selecionados = st.multiselect(
+            "Selecione os anos alvo na lista:",
+            options=anos_disponiveis,
+            default=[2024, 2025, 2026]
+        )
+        
+    with col_anos2:
+        anos_extras_texto = st.text_input(
+            "Outros anos (separados por vírgula):",
+            placeholder="Ex: 2018, 2019"
+        )
+
+    # 🧠 Lógica de junção dos anos:
+    anos_finais = list(anos_selecionados)
+    if anos_extras_texto.strip():
+        import re
+        # Extrai qualquer bloco de 4 números consecutivos que o utilizador digitar
+        anos_extras = re.findall(r'\b\d{4}\b', anos_extras_texto)
+        anos_finais.extend([int(a) for a in anos_extras])
+        
+    # Remove duplicados e ordena cronologicamente
+    anos_finais = sorted(list(set(anos_finais)))
 
     if st.button("🚀 Iniciar Coleta e Compilação Automática", use_container_width=True):
-        if not anos_selecionados:
-            st.warning("⚠️ Selecione pelo menos um ano para servir de filtro de alterações.")
+        if not anos_finais:
+            st.warning("⚠️ Selecione ou digite pelo menos um ano para servir de filtro de alterações.")
         elif not lista_final_leis:
             st.warning("⚠️ Nenhuma fonte de dados ou URL estruturada foi detectada.")
         else:
@@ -139,7 +160,7 @@ with col_esquerda:
                     status, resultado = formatador.compilar_pdf(
                         fila_compilacao, 
                         nome_base="VadeMecum_Minerado", 
-                        anos_destaque=anos_selecionados
+                        anos_destaque=anos_finais  # <--- ATUALIZAR AQUI
                     )
                     
                     if status == "sucesso":
