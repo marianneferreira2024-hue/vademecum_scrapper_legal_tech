@@ -3,6 +3,8 @@ import os
 import unicodedata
 import subprocess
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 
 def raspar_portal_planalto(url):
@@ -14,8 +16,21 @@ def raspar_portal_planalto(url):
         if not url_limpa.lower().startswith("http"):
             return "Erro: A URL fornecida não é válida."
 
-        headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
-        resposta = requests.get(url_limpa, headers=headers, timeout=20)
+        # ESTRATÉGIA ANTI-BLOQUEIO: Cria uma sessão com tentativas automáticas (Retries)
+        session = requests.Session()
+        retries = Retry(total=5, backoff_factor=1.5, status_forcelist=[429, 500, 502, 503, 504])
+        session.mount('http://', HTTPAdapter(max_retries=retries))
+        session.mount('https://', HTTPAdapter(max_retries=retries))
+
+        # DISFARCE DE NAVEGADOR: Cabeçalhos completos para simular um humano
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Connection": "keep-alive"
+        }
+        
+        resposta = session.get(url_limpa, headers=headers, timeout=30)
         resposta.encoding = 'utf-8' if resposta.encoding not in ['ISO-8859-1', 'iso-8859-1'] else 'iso-8859-1'
         
         if resposta.status_code != 200:
@@ -23,18 +38,14 @@ def raspar_portal_planalto(url):
             
         soup = BeautifulSoup(resposta.text, 'html.parser')
         
-        # 1. TRADUTOR DE QUEBRAS: Converte <br> em quebras de linha reais para não colar rubricas e artigos
         for br in soup.find_all('br'):
             br.replace_with('\n')
             
         paragrafos = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4'])
-        
         linhas_texto = []
         for p in paragrafos:
             texto = p.get_text(separator=' ', strip=True)
-            # Remove espaços duplos mas preserva os \n que injetámos
             texto = re.sub(r'[ \t\r\f\v]+', ' ', texto) 
-            
             for linha in texto.split('\n'):
                 linha = linha.strip()
                 if linha and len(linha) > 2:
