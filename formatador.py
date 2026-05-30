@@ -50,7 +50,7 @@ def raspar_portal_planalto(url):
             
             for linha in texto.split('\n'):
                 linha = linha.strip()
-                if linha and len(linha) > 4 and not linha.startswith("Mensagem de"):
+                if linha and len(linha) > 2 and not linha.startswith("Mensagem de"):
                     linhas_texto.append(linha)
                     
         if not linhas_texto:
@@ -73,13 +73,11 @@ def higienizar_unicodes(texto):
         
     texto = re.sub(r'[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]', '', texto)
     
+    # Padroniza espaçamentos antes de quebras estruturais legítimas
     texto = re.sub(r'(?<=\S)\s+(Art\.\s*\d)', r'\n\1', texto)
     texto = re.sub(r'(?<=\S)\s+(§\s*\d)', r'\n\1', texto)
     texto = re.sub(r'(?<=\S)\s+(Parágrafo único)', r'\n\1', texto)
     texto = re.sub(r'(?<=\S)\s+(Pena\s*[-–])', r'\n\1', texto)
-    
-    texto = re.sub(r'(Art\.\s*\d+[-A-Za-z0-9ºª]*[\.\-]?)([A-Z])', r'\1 \2', texto)
-    texto = re.sub(r'(§\s*\d+[\sºoª\.]*)([A-Z])', r'\1 \2', texto)
     
     return texto
 
@@ -115,7 +113,7 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
 
         for l in texto_limpo.split('\n'):
             l = l.strip()
-            if not l or "googleusercontent.com" in l or "immersive_entry_chip" in l or l == "Vigência" or l == "Produção de efeitos":
+            if not l or "googleusercontent.com" in l or "immersive_entry_chip" in l or l in ["Vigência", "Produção de efeitos"]:
                 continue
             
             if l.startswith('# NOME_LEI '):
@@ -130,13 +128,35 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 hierarquia_ativa[tipo_est] = l
                 resetar_niveis_abaixo(tipo_est)
                 continue
+            
+            # --- ALGORITMO DE AGLUTINAÇÃO INTELIGENTE (FURA QUEBRAS DO PLANALTO) ---
+            if linhas_validas:
+                ultimo_token = linhas_validas[-1]
+                texto_anterior = ultimo_token['resto'] if ultimo_token['tipo'] != 'TEXTO' else ultimo_token['texto']
                 
+                is_pena = l.lower().startswith('pena')
+                is_nota_rodape = bool(re.search(r'^\s*[\(\[]?(Lei|Redação|Incluído|Vide|Revogado|Acrescentado|Decreto|Medida)', l, re.IGNORECASE))
+                is_continuacao_direta = l[0].islower() or l.startswith(',') or l.startswith(';') or l.startswith('.') or l.startswith(')')
+                
+                # Verifica se a linha anterior terminou com um conector óbvio cortado a meio
+                terminou_pendente = bool(re.search(r'(Lei|nº|n°|no|do|da|pela|pelo|de|em|\()\s*$', texto_anterior, re.IGNORECASE))
+                # Verifica se a linha atual completa uma citação isolada (ex: "15.397, de 2026)")
+                completa_citacao = bool(re.search(r'^\s*\d+.*?de\s+\d{4}\)', l))
+
+                if not is_pena and (is_continuacao_direta or is_nota_rodape or terminou_pendente or completa_citacao):
+                    if ultimo_token['tipo'] in ['ARTIGO', 'PARAGRAFO', 'INCISO', 'ALINEA']:
+                        linhas_validas[-1]['resto'] = (linhas_validas[-1]['resto'] + " " + l).strip()
+                    else:
+                        linhas_validas[-1]['texto'] = (linhas_validas[-1]['texto'] + " " + l).strip()
+                    continue
+            # -----------------------------------------------------------------------
+
             token = None
             match_art = re.match(r'^(Art\.\s*\d+[-A-Za-z0-9ºª]*)\s*[\.\-–—]?\s*(.*)', l)
             if match_art:
                 token = {'tipo': 'ARTIGO', 'nome': match_art.group(1).strip(), 'resto': match_art.group(2).strip(), 'hierarquia': dict(hierarquia_ativa)}
             else:
-                match_par = re.match(r'^(§\s*\d+[\sºoª\.]*|Parágrafo\s+único)\s*[\.\-–—]?\s*(.*)', l, re.IGNORECASE)
+                match_par = re.match(r'^(§\s*\d+[-A-Za-z0-9ºª\s\.]*|Parágrafo\s+único)\s*[\.\-–—]?\s*(.*)', l, re.IGNORECASE)
                 if match_par:
                     token = {'tipo': 'PARAGRAFO', 'nome': match_par.group(1).strip(), 'resto': match_par.group(2).strip()}
                 else:
@@ -148,19 +168,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                         if match_ali:
                             token = {'tipo': 'ALINEA', 'nome': match_ali.group(1).strip(), 'resto': match_ali.group(2).strip()}
                         else:
-                            is_pena = l.lower().startswith('pena')
-                            is_nota_rodape = bool(re.search(r'^\s*[\(\[]?(Lei|Redação|Incluído|Vide|Revogado|Acrescentado)', l, re.IGNORECASE))
-                            is_continuacao = l[0].islower() or l.startswith(',') or l.startswith(';')
-                            
-                            if linhas_validas and not is_pena and (is_continuacao or is_nota_rodape):
-                                ultimo_tipo = linhas_validas[-1]['tipo']
-                                if ultimo_tipo in ['ARTIGO', 'PARAGRAFO', 'INCISO', 'ALINEA']:
-                                    linhas_validas[-1]['resto'] = (linhas_validas[-1]['resto'] + " " + l).strip()
-                                    continue
-                                elif ultimo_tipo == 'TEXTO':
-                                    linhas_validas[-1]['texto'] = (linhas_validas[-1]['texto'] + " " + l).strip()
-                                    continue
-                            
                             token = {'tipo': 'TEXTO', 'texto': l}
 
             if token:
@@ -237,7 +244,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             
         b['conteudo'] = sub_itens_alterados
         artigos_filtrados.append(b)
-
 
     documento_latex = []
     documento_latex.append(r"\documentclass[10pt,a4paper,twocolumn]{article}") 
@@ -336,7 +342,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                     em_lista_inciso = True
                 documento_latex.append(f"        \\item {pref_c}{limpar_texto_latex(c.get('resto', ''))}")
             elif c['tipo'] == 'ALINEA':
-                # CORREÇÃO AQUI: Permite Alíneas sem "Incisos Pai" (Ex: § 1º, a)) sem quebrar o LaTeX
                 if not em_lista_alinea:
                     margem = "0.7cm" if not em_lista_inciso else "0.5cm"
                     documento_latex.append(f"        \\begin{{enumerate}}[label=\\textbf{{\\alph*)}}, leftmargin={margem}]"); em_lista_alinea = True
