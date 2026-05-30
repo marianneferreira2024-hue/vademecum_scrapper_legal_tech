@@ -189,7 +189,14 @@ with col_direita:
             )
         
         base64_pdf = base64.b64encode(dados_pdf).decode('utf-8')
-        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="520" style="border:1px solid #64748B; border-radius:8px;"></iframe>'
+        
+        # Nova abordagem com <embed> e fallback para <object> (Fura o bloqueio do Chrome/Edge)
+        pdf_display = f'''
+        <object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="600" style="border:1px solid #64748B; border-radius:8px;">
+            <embed src="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="600" />
+            <p>O seu navegador bloqueou a pré-visualização. Utilize o botão de descarregar acima.</p>
+        </object>
+        '''
         st.markdown(pdf_display, unsafe_allow_html=True)
     else:
         st.info("ℹ️ Aguardando processamento. Escolha os diplomas desejados no painel esquerdo e ative a compilação.")
