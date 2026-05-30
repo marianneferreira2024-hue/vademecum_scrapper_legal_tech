@@ -12,7 +12,26 @@ MAPA_LEIS = {
     "Código Penal (Decreto-Lei nº 2.848/40)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm",
     "Código de Processo Penal (Decreto-Lei nº 3.689/41)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689.htm",
     "Lei de Crimes Hediondos (Lei nº 8.072/90)": "https://www.planalto.gov.br/ccivil_03/leis/l8072.htm",
-    "Lei de Introdução às Normas do Direito Brasileiro (LINDB)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del4657compilado.htm"
+    "Lei de Introdução às Normas do Direito Brasileiro (LINDB)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del4657compilado.htm",
+    "Código Civil (Lei nº 10.406/2002)": "https://www.planalto.gov.br/ccivil_03/leis/2002/l10406.htm",
+    "Código de Processo Civil (Lei nº 13.105/2015)": "https://www4.planalto.gov.br/legislacao/portal-legis/legislacao-1/codigos-1#wrapper",
+    "Código Tributário Nacional (Lei nº 5.172/1967)": "https://www.planalto.gov.br/ccivil_03/leis/l5172.htm",
+    "Consolidação das Leis do Trabalho (Decreto-Lei nº 5.430/1943)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm",
+    "Código de Defesa do Consumidor (Lei nº 8.078/1990)": "https://www.planalto.gov.br/ccivil_03/leis/l8078.htm",
+    "Código Eleitoral (Lei nº 4.737/1965)": "https://www.planalto.gov.br/ccivil_03/leis/l4737.htm",
+    "Estatuto da Criança e do Adolescente (Lei nº 12.525/2011)": "https://www.planalto.gov.br/ccivil_03/leis/l8069.htm",
+    "Estatuto da Pessoa Idosa (Lei nº 10.741/2003)": "https://www.planalto.gov.br/ccivil_03/leis/2003/l10.741.htm",
+    "Estatuto da Igualdade Racial (Lei nº 12.288/2010)": "https://www.planalto.gov.br/ccivil_03/_ato2007-2010/2010/lei/l12288.htm",
+    "Estatuto da Pessoa com Deficiência (Lei nº 13.146/2015)": "https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2015/lei/l13146.htm",
+    "Lei Maria da Penha (Lei nº 11.340/2006)": "https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11340.htm",
+    "Lei de Contravenções Penais (Decreto-Lei nº 3.688/41)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del3688.htm",
+    "Lei de Introdução ao Código Penal (Decreto-Lei nº 3.914/1941)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del3914.htm",
+    "Lei de Execução Penal (Lei nº 7.210/1984)": "https://www.planalto.gov.br/ccivil_03/leis/l7210.htm",
+    "Lei dos Crimes contra a Ordem Tributária (Lei nº 8.137/1990)": "https://www.planalto.gov.br/ccivil_03/leis/l8137.htm",
+    "Lei de Diretrizes e Bases da Educação (Lei nº 9.394/1996)": "https://www.planalto.gov.br/ccivil_03/leis/l9394.htm",
+    "Lei dos Empregados Domésticos (Lei nº 5.810/1972)": "https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp150.htm",
+    "Regime Jurídico dos Servidores Públicos (Lei nº 8.112/1990)": "https://www.planalto.gov.br/ccivil_03/leis/l8112cons.htm",
+    "Lei de Licitações e Contratos Administrativos (Lei nº 14.133/2021)": "https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm"
 }
 
 if "logs" not in st.session_state:
