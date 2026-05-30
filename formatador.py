@@ -6,7 +6,6 @@ import requests
 from bs4 import BeautifulSoup
 
 def raspar_portal_planalto(url):
-    """Faz o Web Scraping eliminando as duplicações de tags aninhadas."""
     try:
         url_limpa = str(url).strip().replace('"', '').replace("'", "").replace('`', '')
         url_limpa = url_limpa.replace('\n', '').replace('\r', '').replace('\t', '')
@@ -23,8 +22,6 @@ def raspar_portal_planalto(url):
             return f"Erro: Status Code: {resposta.status_code}"
             
         soup = BeautifulSoup(resposta.text, 'html.parser')
-        
-        # CORREÇÃO CRÍTICA: Buscar apenas 'p' e 'h'. Se buscarmos 'span', o código duplica o texto!
         paragrafos = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4'])
         
         linhas_texto = []
@@ -43,21 +40,14 @@ def raspar_portal_planalto(url):
 
 def higienizar_unicodes(texto):
     if not texto: return ""
-    
-    # FORÇA a normalização para NFKC, que aglutina letras com acentos separados
-    # Transformando, por exemplo, 'i' + '´' (U+0301) no 'í' genuíno (U+00ED)
     texto = unicodedata.normalize('NFKC', texto)
-    
     substituicoes = {
         '\x1c': 'fi', '\x1d': 'fl', '\xa0': ' ', '\u200b': '', '\u200c': '', 
         '\u200d': '', '\ufeff': '', '\x0c': '\n', '–': '-', '—': '-', 
-        '“': '"', '”': '"', '‘': "'", '’': "'",
-        # Adicione uma proteção extra contra o acento fantasma se ele sobreviver à normalização:
-        '\u0301': '' 
+        '“': '"', '”': '"', '‘': "'", '’': "'", '\u0301': ''
     }
     for erro, correcao in substituicoes.items():
         texto = texto.replace(erro, correcao)
-        
     return re.sub(r'[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]', '', texto)
 
 def limpar_texto_latex(texto):
@@ -75,141 +65,132 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     anos_alvo = [str(a) for a in anos_destaque]
     regex_anos = '|'.join(anos_alvo)
     
-    blocos_brutos_totais = []
+    artigos_brutos_totais = []
+    ordem_hierarquia = ['NOME_LEI', 'LIVRO', 'TÍTULO', 'CAPÍTULO', 'SEÇÃO', 'SUBSEÇÃO']
 
-    # FASE 1 e 2: TOKENIZAÇÃO E AGRUPAMENTO
+    # FASE 1 e 2: TOKENIZAÇÃO INTELIGENTE COM MEMÓRIA HIERÁRQUICA
     for nome_lei, texto_bruto in lista_leis:
-        texto_completo = f"# {nome_lei}\n" + texto_bruto
+        texto_completo = f"# NOME_LEI {nome_lei}\n" + texto_bruto
         texto_limpo = higienizar_unicodes(texto_completo)
         
+        hierarquia_ativa = {k: None for k in ordem_hierarquia}
         linhas_validas = []
+        
+        def resetar_niveis_abaixo(nivel):
+            idx = ordem_hierarquia.index(nivel)
+            for k in ordem_hierarquia[idx+1:]:
+                hierarquia_ativa[k] = None
+
         for l in texto_limpo.split('\n'):
             l = l.strip()
             if not l or "googleusercontent.com" in l or "immersive_entry_chip" in l: continue
             
-            if l.startswith('# '):
-                linhas_validas.append({'tipo': 'NOME_LEI', 'texto': l.replace('#', '').strip()})
+            if l.startswith('# NOME_LEI '):
+                hierarquia_ativa['NOME_LEI'] = l.replace('# NOME_LEI ', '').strip()
+                resetar_niveis_abaixo('NOME_LEI')
                 continue
                 
-            if re.match(r'^(LIVRO|TÍTULO|CAPÍTULO|SEÇÃO|SUBSEÇÃO)\s+', l):
-                linhas_validas.append({'tipo': 'ESTRUTURA', 'texto': l})
+            match_est = re.match(r'^(LIVRO|TÍTULO|TITULO|CAPÍTULO|CAPITULO|SEÇÃO|SECAO|SUBSEÇÃO|SUBSECAO)\s+', l, re.IGNORECASE)
+            if match_est:
+                tipo_est = match_est.group(1).upper()
+                tipo_est = tipo_est.replace('TITULO', 'TÍTULO').replace('CAPITULO', 'CAPÍTULO').replace('SECAO', 'SEÇÃO').replace('SUBSECAO', 'SUBSEÇÃO')
+                hierarquia_ativa[tipo_est] = l
+                resetar_niveis_abaixo(tipo_est)
                 continue
                 
+            token = None
             match_art = re.match(r'^(Art\.\s*\d+[-A-Za-z0-9ºª]*)\s*[\.\-–—]?\s*(.*)', l)
             if match_art:
-                linhas_validas.append({'tipo': 'ARTIGO', 'nome': match_art.group(1).strip(), 'resto': match_art.group(2).strip()})
-                continue
-                
-            match_par = re.match(r'^(§\s*\d+[\sºoª\.]*|Parágrafo\s+único)\s*[\.\-–—]?\s*(.*)', l, re.IGNORECASE)
-            if match_par:
-                linhas_validas.append({'tipo': 'PARAGRAFO', 'nome': match_par.group(1).strip(), 'resto': match_par.group(2).strip()})
-                continue
-                
-            match_inc = re.match(r'^([IVXLC]+)\s*[\.\-–—]\s*(.*)', l)
-            if match_inc and match_inc.group(1) != "VETADO":
-                linhas_validas.append({'tipo': 'INCISO', 'nome': match_inc.group(1).strip(), 'resto': match_inc.group(2).strip()})
-                continue
-                
-            match_ali = re.match(r'^([a-z])\)\s*(.*)', l)
-            if match_ali:
-                linhas_validas.append({'tipo': 'ALINEA', 'nome': match_ali.group(1).strip(), 'resto': match_ali.group(2).strip()})
-                continue
-                
-            is_pena = l.lower().startswith('pena')
-            if linhas_validas and not is_pena:
-                ultimo_tipo = linhas_validas[-1]['tipo']
-                if ultimo_tipo in ['ARTIGO', 'PARAGRAFO', 'INCISO', 'ALINEA']:
-                    linhas_validas[-1]['resto'] = (linhas_validas[-1]['resto'] + " " + l).strip()
-                    continue
-                elif ultimo_tipo == 'TEXTO':
-                    linhas_validas[-1]['texto'] = (linhas_validas[-1]['texto'] + " " + l).strip()
-                    continue
-            
-            linhas_validas.append({'tipo': 'TEXTO', 'texto': l})
+                token = {'tipo': 'ARTIGO', 'nome': match_art.group(1).strip(), 'resto': match_art.group(2).strip(), 'hierarquia': dict(hierarquia_ativa)}
+            else:
+                match_par = re.match(r'^(§\s*\d+[\sºoª\.]*|Parágrafo\s+único)\s*[\.\-–—]?\s*(.*)', l, re.IGNORECASE)
+                if match_par:
+                    token = {'tipo': 'PARAGRAFO', 'nome': match_par.group(1).strip(), 'resto': match_par.group(2).strip()}
+                else:
+                    match_inc = re.match(r'^([IVXLC]+)\s*[\.\-–—]\s*(.*)', l)
+                    if match_inc and match_inc.group(1) != "VETADO":
+                        token = {'tipo': 'INCISO', 'nome': match_inc.group(1).strip(), 'resto': match_inc.group(2).strip()}
+                    else:
+                        match_ali = re.match(r'^([a-z])\)\s*(.*)', l)
+                        if match_ali:
+                            token = {'tipo': 'ALINEA', 'nome': match_ali.group(1).strip(), 'resto': match_ali.group(2).strip()}
+                        else:
+                            is_pena = l.lower().startswith('pena')
+                            if linhas_validas and not is_pena:
+                                ultimo_tipo = linhas_validas[-1]['tipo']
+                                if ultimo_tipo in ['ARTIGO', 'PARAGRAFO', 'INCISO', 'ALINEA']:
+                                    linhas_validas[-1]['resto'] = (linhas_validas[-1]['resto'] + " " + l).strip()
+                                    continue
+                                elif ultimo_tipo == 'TEXTO':
+                                    linhas_validas[-1]['texto'] = (linhas_validas[-1]['texto'] + " " + l).strip()
+                                    continue
+                            
+                            token = {'tipo': 'TEXTO', 'texto': l}
+
+            if token:
+                linhas_validas.append(token)
 
         bloco_artigo_atual = None
         for token in linhas_validas:
-            if token['tipo'] in ['ESTRUTURA', 'NOME_LEI']:
+            if token['tipo'] == 'ARTIGO':
                 if bloco_artigo_atual:
-                    blocos_brutos_totais.append(bloco_artigo_atual)
-                    bloco_artigo_atual = None
-                blocos_brutos_totais.append(token)
-            elif token['tipo'] == 'ARTIGO':
-                if bloco_artigo_atual:
-                    blocos_brutos_totais.append(bloco_artigo_atual)
-                bloco_artigo_atual = {'tipo': 'BLOCO_ARTIGO', 'artigo': token, 'conteudo': []}
+                    artigos_brutos_totais.append(bloco_artigo_atual)
+                bloco_artigo_atual = {'tipo': 'BLOCO_ARTIGO', 'artigo': token, 'conteudo': [], 'hierarquia': token['hierarquia']}
             else:
                 if bloco_artigo_atual:
                     bloco_artigo_atual['conteudo'].append(token)
         if bloco_artigo_atual:
-            blocos_brutos_totais.append(bloco_artigo_atual)
+            artigos_brutos_totais.append(bloco_artigo_atual)
 
     # FASE 3: BISTURI CIRÚRGICO
-    blocos_filtrados = []
-    for b in blocos_brutos_totais:
-        if b['tipo'] in ['ESTRUTURA', 'NOME_LEI']:
-            blocos_filtrados.append(b)
+    artigos_filtrados = []
+    for b in artigos_brutos_totais:
+        texto_caput = b['artigo'].get('nome', '') + " " + b['artigo'].get('resto', '')
+        caput_tem_ano = any(ano in texto_caput for ano in anos_alvo)
+        
+        regex_novo = rf'\((Incluído|Acrescentado|Inserido).*?({regex_anos})\)'
+        caput_novo_integral = caput_tem_ano and re.search(regex_novo, texto_caput, re.IGNORECASE)
+        
+        if caput_novo_integral:
+            sub_itens_alterados = b['conteudo']
+        else:
+            itens_para_manter = set()
+            idx_paragrafo_atual = -1
+            idx_inciso_atual = -1
+            
+            for i, c in enumerate(b['conteudo']):
+                tipo = c['tipo']
+                if tipo == 'PARAGRAFO': 
+                    idx_paragrafo_atual = i
+                    idx_inciso_atual = -1 
+                elif tipo == 'INCISO': 
+                    idx_inciso_atual = i
+
+                texto_c = c.get('nome', '') + " " + c.get('resto', '') + " " + c.get('texto', '')
+                is_pena = (tipo == 'TEXTO' and texto_c.strip().lower().startswith('pena'))
+                
+                if any(ano in texto_c for ano in anos_alvo) or (caput_tem_ano and is_pena):
+                    itens_para_manter.add(i)
+                    if tipo == 'ALINEA' and idx_inciso_atual != -1:
+                        itens_para_manter.add(idx_inciso_atual)
+                        if idx_paragrafo_atual != -1:
+                            itens_para_manter.add(idx_paragrafo_atual)
+                    elif tipo == 'INCISO' and idx_paragrafo_atual != -1:
+                        itens_para_manter.add(idx_paragrafo_atual)
+
+            sub_itens_alterados = [c for i, c in enumerate(b['conteudo']) if i in itens_para_manter]
+        
+        if not caput_tem_ano and len(sub_itens_alterados) == 0:
             continue
             
-        if b['tipo'] == 'BLOCO_ARTIGO':
-            texto_caput = b['artigo'].get('nome', '') + " " + b['artigo'].get('resto', '')
-            caput_tem_ano = any(ano in texto_caput for ano in anos_alvo)
-            
-            regex_novo = rf'\((Incluído|Acrescentado|Inserido).*?({regex_anos})\)'
-            caput_novo_integral = caput_tem_ano and re.search(regex_novo, texto_caput, re.IGNORECASE)
-            
-            if caput_novo_integral:
-                sub_itens_alterados = b['conteudo']
-            else:
-                itens_para_manter = set()
-                idx_paragrafo_atual = -1
-                idx_inciso_atual = -1
-                
-                for i, c in enumerate(b['conteudo']):
-                    tipo = c['tipo']
-                    if tipo == 'PARAGRAFO': 
-                        idx_paragrafo_atual = i
-                        idx_inciso_atual = -1 
-                    elif tipo == 'INCISO': 
-                        idx_inciso_atual = i
+        b['conteudo'] = sub_itens_alterados
+        artigos_filtrados.append(b)
 
-                    texto_c = c.get('nome', '') + " " + c.get('resto', '') + " " + c.get('texto', '')
-                    is_pena = (tipo == 'TEXTO' and texto_c.strip().lower().startswith('pena'))
-                    
-                    if any(ano in texto_c for ano in anos_alvo) or (caput_tem_ano and is_pena):
-                        itens_para_manter.add(i)
-                        if tipo == 'ALINEA' and idx_inciso_atual != -1:
-                            itens_para_manter.add(idx_inciso_atual)
-                            if idx_paragrafo_atual != -1:
-                                itens_para_manter.add(idx_paragrafo_atual)
-                        elif tipo == 'INCISO' and idx_paragrafo_atual != -1:
-                            itens_para_manter.add(idx_paragrafo_atual)
 
-                sub_itens_alterados = [c for i, c in enumerate(b['conteudo']) if i in itens_para_manter]
-            
-            if not caput_tem_ano and len(sub_itens_alterados) == 0:
-                continue
-                
-            b['conteudo'] = sub_itens_alterados
-            blocos_filtrados.append(b)
-
-    # FASE 4: TÍTULOS FANTASMAS
-    final_elementos = []
-    estruturas_pendentes = [] 
-    for b in blocos_filtrados:
-        if b['tipo'] in ['ESTRUTURA', 'NOME_LEI']:
-            estruturas_pendentes.append(b) 
-        elif b['tipo'] == 'BLOCO_ARTIGO':
-            final_elementos.extend(estruturas_pendentes)
-            estruturas_pendentes = [] 
-            final_elementos.append(b)
-
-    # FASE 5: MONTAGEM LATEX LIMPA (Sem multicol)
+    # FASE 4: MONTAGEM LATEX
     documento_latex = []
-    # Usamos twocolumn na classe base, que é 100% suportado pelas caixas quebraveis
     documento_latex.append(r"\documentclass[10pt,a4paper,twocolumn]{article}") 
-    # O pacote utf8x (Extended UTF-8) lida com caracteres Unicode não documentados
-    documento_latex.append(r"\usepackage[utf8x]{inputenc}")
+    documento_latex.append(r"\usepackage[utf8x]{inputenc}") # utf8x evita falhas de caracteres estranhos do governo
     documento_latex.append(r"\usepackage[T1]{fontenc}")
     documento_latex.append(r"\usepackage[brazilian]{babel}")
     documento_latex.append(r"\usepackage{lmodern}") 
@@ -227,7 +208,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     
     documento_latex.append(r"\begin{document}")
     
-    # Capa / Cabeçalho mesclando as duas colunas
     documento_latex.append(r"\twocolumn[{")
     documento_latex.append(r"  \begin{center}{\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\par\vspace{0.2cm}")
     documento_latex.append(r"  {\large Atualizações: " + ", ".join(anos_alvo) + r"}\par\vspace{0.6cm}\end{center}")
@@ -242,75 +222,89 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         if em_lista_alinea: documento_latex.append("        \\end{enumerate}"); em_lista_alinea = False
         if em_lista_inciso: documento_latex.append("    \\end{enumerate}"); em_lista_inciso = False
 
-    for el in final_elementos:
-        if el['tipo'] == 'NOME_LEI':
+    last_printed = {k: None for k in ordem_hierarquia}
+
+    for b in artigos_filtrados:
+        h = b['hierarquia']
+        
+        if h['NOME_LEI'] != last_printed['NOME_LEI']:
             fechar_listas()
-            texto_lei = limpar_texto_latex(el.get('texto', ''))
-            
-            # Quando inicia uma lei nova, vai para uma nova página limpa
+            texto_lei = limpar_texto_latex(h['NOME_LEI'])
             documento_latex.append(r"\clearpage")
             documento_latex.append(r"\twocolumn[{")
             documento_latex.append(f"  \\begin{{center}}\\vspace{{0.5cm}}\\noindent\\textbf{{\\LARGE {texto_lei}}}\\par\\vspace{{0.2cm}}\\hrule\\vspace{{0.4cm}}\\end{{center}}")
             documento_latex.append(r"}]")
-            
             documento_latex.append(r"\phantomsection")
-            # Usa o nome simples para evitar bugar o sumário
             nome_limpo = texto_lei.replace(r'\textsuperscript{o}', 'o')
             documento_latex.append(f"\\addcontentsline{{toc}}{{section}}{{{nome_limpo}}}")
+            last_printed['NOME_LEI'] = h['NOME_LEI']
             
-        elif el['tipo'] == 'ESTRUTURA':
-            texto_est = limpar_texto_latex(el.get('texto', ''))
-            documento_latex.append(r"\phantomsection")
-            documento_latex.append(f"\\addcontentsline{{toc}}{{subsection}}{{{texto_est}}}")
-            documento_latex.append(f"\\vspace{{0.3cm}}\\noindent\\textbf{{\\large {texto_est}}}\\par\\vspace{{0.1cm}}")
-            
-        elif el['tipo'] == 'BLOCO_ARTIGO':
-            art = el['artigo']
-            nome_art = limpar_texto_latex(art.get('nome', ''))
-            resto_art = limpar_texto_latex(art.get('resto', ''))
-            
-            documento_latex.append(r"\phantomsection")
-            documento_latex.append(f"\\begin{{artigoBox}}{{{nome_art}}}")
-            
-            if resto_art:
-                pref = r"\marcadorNovo " if any(a in resto_art for a in anos_alvo) else ""
-                documento_latex.append(f"\\noindent {pref}{resto_art}\\par\\vspace{{2pt}}")
+            # Reseta todos os subleveis no rastreador
+            for k in ordem_hierarquia[1:]:
+                last_printed[k] = None
                 
-            for c in el['conteudo']:
-                texto_item_bruto = c.get('resto','') + c.get('texto','')
-                pref_c = r"\marcadorNovo " if any(a in texto_item_bruto for a in anos_alvo) else ""
+        for nivel in ['LIVRO', 'TÍTULO', 'CAPÍTULO', 'SEÇÃO', 'SUBSEÇÃO']:
+            if h[nivel] != last_printed[nivel]:
+                if h[nivel]: # Se de facto existir uma estrutura aqui (ex: TÍTULO I)
+                    texto_est = limpar_texto_latex(h[nivel])
+                    documento_latex.append(r"\phantomsection")
+                    if nivel in ['LIVRO', 'TÍTULO']:
+                        documento_latex.append(f"\\addcontentsline{{toc}}{{subsection}}{{{texto_est}}}")
+                    else:
+                        documento_latex.append(f"\\addcontentsline{{toc}}{{subsubsection}}{{{texto_est}}}")
+                    documento_latex.append(f"\\vspace{{0.3cm}}\\noindent\\textbf{{\\large {texto_est}}}\\par\\vspace{{0.1cm}}")
                 
-                if c['tipo'] == 'PARAGRAFO':
-                    fechar_listas()
-                    nome_p = limpar_texto_latex(c.get('nome', ''))
-                    resto_p = limpar_texto_latex(c.get('resto', ''))
-                    documento_latex.append(f"\n\\noindent \\textbf{{{nome_p}}} {pref_c}{resto_p}\\par\\vspace{{2pt}}")
-                elif c['tipo'] == 'INCISO':
-                    if em_lista_alinea: documento_latex.append("        \\end{enumerate}"); em_lista_alinea = False
-                    if not em_lista_inciso:
-                        documento_latex.append("    \\begin{enumerate}[label=\\textbf{\\Roman* -}, leftmargin=0.7cm]")
-                        em_lista_inciso = True
-                    documento_latex.append(f"        \\item {pref_c}{limpar_texto_latex(c.get('resto', ''))}")
-                elif c['tipo'] == 'ALINEA':
-                    if not em_lista_inciso:
-                        documento_latex.append("    \\begin{enumerate}[label=\\textbf{\\Roman* -}, leftmargin=0.7cm]"); em_lista_inciso = True
-                    if not em_lista_alinea:
-                        documento_latex.append("        \\begin{enumerate}[label=\\textbf{\\alph*)}, leftmargin=0.5cm]"); em_lista_alinea = True
-                    documento_latex.append(f"            \\item {pref_c}{limpar_texto_latex(c.get('resto', ''))}")
-                elif c['tipo'] == 'TEXTO':
-                    fechar_listas()
-                    txt = limpar_texto_latex(c.get('texto', ''))
-                    if txt.startswith("Pena"): txt = re.sub(r'^Pena\s*[-–\.]?\s*(.*)', r'\\textbf{Pena -} \1', txt)
-                    documento_latex.append(f"\n\\noindent {pref_c}{txt}\\par\\vspace{{2pt}}")
-                    
-            fechar_listas()
-            documento_latex.append("\\end{artigoBox}")
+                last_printed[nivel] = h[nivel]
+                # Ao imprimir um novo nível superior, reseta os filhos para garantir impressão
+                idx = ordem_hierarquia.index(nivel)
+                for k in ordem_hierarquia[idx+1:]:
+                    last_printed[k] = None
+
+        # Imprime o bloco do artigo
+        art = b['artigo']
+        nome_art = limpar_texto_latex(art.get('nome', ''))
+        resto_art = limpar_texto_latex(art.get('resto', ''))
+        
+        documento_latex.append(r"\phantomsection")
+        documento_latex.append(f"\\begin{{artigoBox}}{{{nome_art}}}")
+        
+        if resto_art:
+            pref = r"\marcadorNovo " if any(a in resto_art for a in anos_alvo) else ""
+            documento_latex.append(f"\\noindent {pref}{resto_art}\\par\\vspace{{2pt}}")
+            
+        for c in b['conteudo']:
+            texto_item_bruto = c.get('resto','') + c.get('texto','')
+            pref_c = r"\marcadorNovo " if any(a in texto_item_bruto for a in anos_alvo) else ""
+            
+            if c['tipo'] == 'PARAGRAFO':
+                fechar_listas()
+                nome_p = limpar_texto_latex(c.get('nome', ''))
+                resto_p = limpar_texto_latex(c.get('resto', ''))
+                documento_latex.append(f"\n\\noindent \\textbf{{{nome_p}}} {pref_c}{resto_p}\\par\\vspace{{2pt}}")
+            elif c['tipo'] == 'INCISO':
+                if em_lista_alinea: documento_latex.append("        \\end{enumerate}"); em_lista_alinea = False
+                if not em_lista_inciso:
+                    documento_latex.append("    \\begin{enumerate}[label=\\textbf{\\Roman* -}, leftmargin=0.7cm]")
+                    em_lista_inciso = True
+                documento_latex.append(f"        \\item {pref_c}{limpar_texto_latex(c.get('resto', ''))}")
+            elif c['tipo'] == 'ALINEA':
+                if not em_lista_inciso:
+                    documento_latex.append("    \\begin{enumerate}[label=\\textbf{\\Roman* -}, leftmargin=0.7cm]"); em_lista_inciso = True
+                if not em_lista_alinea:
+                    documento_latex.append("        \\begin{enumerate}[label=\\textbf{\\alph*)}, leftmargin=0.5cm]"); em_lista_alinea = True
+                documento_latex.append(f"            \\item {pref_c}{limpar_texto_latex(c.get('resto', ''))}")
+            elif c['tipo'] == 'TEXTO':
+                fechar_listas()
+                txt = limpar_texto_latex(c.get('texto', ''))
+                if txt.startswith("Pena"): txt = re.sub(r'^Pena\s*[-–\.]?\s*(.*)', r'\\textbf{Pena -} \1', txt)
+                documento_latex.append(f"\n\\noindent {pref_c}{txt}\\par\\vspace{{2pt}}")
+                
+        fechar_listas()
+        documento_latex.append("\\end{artigoBox}")
             
     documento_latex.append(r"\end{document}")
     
-    # Prevenção extra de espaços excessivos
     codigo_latex = "\n".join(documento_latex)
-    codigo_latex = re.sub(r'\\begin\{artigoBox\}\{[^\}]*\}\s*\\end\{artigoBox\}', '', codigo_latex)
     return codigo_latex
 
 def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None):
