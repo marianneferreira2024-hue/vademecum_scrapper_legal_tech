@@ -87,6 +87,7 @@ with col_esquerda:
     st.markdown("---")
     st.subheader("📅 Filtro de Destaques")
     
+    # NOVAS COLUNAS PARA OS ANOS ALVO
     col_anos1, col_anos2 = st.columns([2, 1])
     
     with col_anos1:
@@ -99,19 +100,17 @@ with col_esquerda:
         
     with col_anos2:
         anos_extras_texto = st.text_input(
-            "Outros anos (separados por vírgula):",
+            "Outros anos (Ex: 2018):",
             placeholder="Ex: 2018, 2019"
         )
 
-    # 🧠 Lógica de junção dos anos:
+    # Lógica de fusão dos anos (Menu + Texto Livre)
     anos_finais = list(anos_selecionados)
     if anos_extras_texto.strip():
-        import re
-        # Extrai qualquer bloco de 4 números consecutivos que o utilizador digitar
         anos_extras = re.findall(r'\b\d{4}\b', anos_extras_texto)
         anos_finais.extend([int(a) for a in anos_extras])
         
-    # Remove duplicados e ordena cronologicamente
+    # Remove duplicados e ordena
     anos_finais = sorted(list(set(anos_finais)))
 
     if st.button("🚀 Iniciar Coleta e Compilação Automática", use_container_width=True):
@@ -121,7 +120,6 @@ with col_esquerda:
             st.warning("⚠️ Nenhuma fonte de dados ou URL estruturada foi detectada.")
         else:
             fila_compilacao = []
-            processo_valido = True
             
             if fonte_opcao == "Capturar do Portal Planalto (Múltiplos Diplomas)":
                 barra_progresso = st.progress(0)
@@ -151,16 +149,17 @@ with col_esquerda:
                 status_coleta.empty()
                 barra_progresso.empty()
             else:
-                # Entrada de texto direta
                 fila_compilacao = lista_final_leis
 
             if fila_compilacao:
                 with st.spinner("⚙️ Compilando PDF Unificado via MiKTeX (Dupla Passagem para Sumário)..."):
                     registar_log(f"Iniciando montagem do lote com {len(fila_compilacao)} itens.", "Info")
+                    
+                    # Chamada corrigida e limpa
                     status, resultado = formatador.compilar_pdf(
                         fila_compilacao, 
                         nome_base="VadeMecum_Minerado", 
-                        anos_destaque=anos_finais  # <--- ATUALIZAR AQUI
+                        anos_destaque=anos_finais
                     )
                     
                     if status == "sucesso":
@@ -183,7 +182,7 @@ with col_direita:
         with open(caminho_pdf, "rb") as f_pdf:
             dados_pdf = f_pdf.read()
             st.download_button(
-                label="</div> Descarregar Vade Mecum Compilado (PDF)",
+                label="📥 Descarregar Vade Mecum Compilado (PDF)",
                 data=dados_pdf,
                 file_name="VadeMecum_LAPEJURI_Lote.pdf",
                 mime="application/pdf",
