@@ -187,14 +187,13 @@ with col_direita:
                 mime="application/pdf",
                 use_container_width=True
             )
-        
-        import streamlit.components.v1 as components
+            
         import base64
 
-        # 1. Converte os dados binários do PDF para string Base64 (sem quebras de linha)
+        # 1. Converte os dados binários do PDF para string Base64
         base64_pdf = base64.b64encode(dados_pdf).decode('utf-8')
         
-        # 2. Constrói o HTML injetando JavaScript para converter Base64 em Blob em tempo de execução
+        # 2. Constrói o HTML com JavaScript para gerar o Blob seguro em memória
         html_preview = f"""
         <iframe id="pdf-viewer" width="100%" height="580px" style="border:1px solid #64748B; border-radius:8px;"></iframe>
         <script>
@@ -215,5 +214,5 @@ with col_direita:
         </script>
         """
         
-        # 3. Renderiza o visualizador isolado num ambiente seguro (fura o bloqueio do Edge/Chrome)
-        components.html(html_preview, height=600)
+        # 3. Renderiza usando o novo método nativo st.iframe (Garante compatibilidade pós-01/06/2026)
+        st.iframe(html_preview, height=600)
