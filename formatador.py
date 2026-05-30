@@ -96,13 +96,17 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     padrao_anos = re.compile(r'\b(' + '|'.join(anos_str) + r')\b')
     
     documento_latex = [
+        r"\documentclass[10pt,a4paper,twocolumn]{article}",
+        r"\usepackage[T1]{fontenc}",
+        r"\usepackage[utf8]{inputenc}",
         r"\usepackage[brazilian]{babel}",
-        r"\usepackage{lmodern}", # RESOLVE O ERRO: Carrega fontes escaláveis
+        r"\usepackage{lmodern}", # Fonte escalável adicionada aqui
         r"\usepackage[top=2cm,bottom=2cm,left=1.2cm,right=1.2cm]{geometry}",
         r"\usepackage{enumitem}",
         r"\usepackage[most]{tcolorbox}",
         r"\usepackage{titlesec}",
-        r"\usepackage[protrusion=true,expansion=false]{microtype}", # Impede o LaTeX de tentar esticar as letras
+        r"\usepackage[protrusion=true,expansion=false]{microtype}", # Expansão desativada para não dar erro
+        r"\sloppy",
         "",
         # Caixa blindada contra estouro e configurada para quebrar páginas de forma limpa
         r"\newtcolorbox{notalegislativa}{",
