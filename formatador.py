@@ -149,7 +149,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                             token = {'tipo': 'ALINEA', 'nome': match_ali.group(1).strip(), 'resto': match_ali.group(2).strip()}
                         else:
                             is_pena = l.lower().startswith('pena')
-                            # COLA SEMÂNTICA 3.0: Mais agressiva a colar as notas aos Incisos
                             is_nota_rodape = bool(re.search(r'^\s*[\(\[]?(Lei|Redação|Incluído|Vide|Revogado|Acrescentado)', l, re.IGNORECASE))
                             is_continuacao = l[0].islower() or l.startswith(',') or l.startswith(';')
                             
@@ -214,19 +213,14 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 texto_c = c.get('nome', '') + " " + c.get('resto', '') + " " + c.get('texto', '')
                 is_pena = (tipo == 'TEXTO' and texto_c.strip().lower().startswith('pena'))
                 
-                # PROTOCOLO DE RESGATE ESTRUTURAL
-                # Se a linha atual tem o ano (mesmo que seja só uma nota solta), mantemos ela!
                 if any(ano in texto_c for ano in anos_alvo) or (caput_tem_ano and is_pena):
                     itens_para_manter.add(i)
-                    
-                    # E puxamos também os pais deste elemento para não o deixar órfão!
                     if tipo == 'ALINEA':
                         if idx_inciso_atual != -1: itens_para_manter.add(idx_inciso_atual)
                         if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
                     elif tipo == 'INCISO':
                         if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
                     elif tipo == 'TEXTO':
-                        # Se a nota de alteração estava solta, resgatamos o Inciso/Alinea de cima!
                         if ultimo_estrutural != -1:
                             itens_para_manter.add(ultimo_estrutural)
                             parent_tipo = b['conteudo'][ultimo_estrutural]['tipo']
@@ -342,10 +336,10 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                     em_lista_inciso = True
                 documento_latex.append(f"        \\item {pref_c}{limpar_texto_latex(c.get('resto', ''))}")
             elif c['tipo'] == 'ALINEA':
-                if not em_lista_inciso:
-                    documento_latex.append("    \\begin{enumerate}[label=\\textbf{\\Roman* -}, leftmargin=0.7cm]"); em_lista_inciso = True
+                # CORREÇÃO AQUI: Permite Alíneas sem "Incisos Pai" (Ex: § 1º, a)) sem quebrar o LaTeX
                 if not em_lista_alinea:
-                    documento_latex.append("        \\begin{enumerate}[label=\\textbf{\\alph*)}, leftmargin=0.5cm]"); em_lista_alinea = True
+                    margem = "0.7cm" if not em_lista_inciso else "0.5cm"
+                    documento_latex.append(f"        \\begin{{enumerate}}[label=\\textbf{{\\alph*)}}, leftmargin={margem}]"); em_lista_alinea = True
                 documento_latex.append(f"            \\item {pref_c}{limpar_texto_latex(c.get('resto', ''))}")
             elif c['tipo'] == 'TEXTO':
                 fechar_listas()
