@@ -195,28 +195,35 @@ def formatar_codigo_penal_para_latex(texto_bruto, anos_destaque=None):
     return "\n".join(documento_latex)
 
 def compilar_pdf(texto_bruto, nome_base="VadeMecum_Minerado", anos_destaque=None):
-    diretorio_atual = os.path.dirname(os.path.abspath(__file__))
-    arquivo_tex = os.path.join(diretorio_atual, f"{nome_base}.tex")
-    arquivo_pdf = os.path.join(diretorio_atual, f"{nome_base}.pdf")
+    # Detecta o Sistema Operacional: usa /tmp no Linux (Nuvem) e a pasta local no Windows
+    if os.name != 'nt':
+        diretorio_base = "/tmp"
+    else:
+        diretorio_base = os.path.dirname(os.path.abspath(__file__))
+        
+    arquivo_tex = os.path.join(diretorio_base, f"{nome_base}.tex")
+    arquivo_pdf = os.path.join(diretorio_base, f"{nome_base}.pdf")
     
-    # Gera o código LaTeX com o filtro estrito (2024-2026)
     codigo_tex = formatar_codigo_penal_para_latex(texto_bruto, anos_destaque)
     
     with open(arquivo_tex, "w", encoding="utf-8") as f:
         f.write(codigo_tex)
         
-    # COMANDO BLINDADO PARA WINDOWS (Força o MiKTeX a instalar pacotes sem abrir janelas pop-up)
+    # Comandos base aceitos universalmente (Windows e Linux)
     comando = [
         "pdflatex", 
         "-interaction=nonstopmode", 
         "-halt-on-error",
-        "-screendialogs=no",
-        f"-output-directory={diretorio_atual}", 
+        f"-output-directory={diretorio_base}", 
         arquivo_tex
     ]
     
+    # Só adiciona o bloqueio de janelas pop-up se estiver rodando no Windows
+    if os.name == 'nt':
+        comando.insert(3, "-screendialogs=no")
+        
     try:
-        # Executa a compilação nativa do Windows através do Python
+        # Roda o LaTeX nativamente ocultando janelas no Windows
         compilacao = subprocess.run(
             comando, 
             capture_output=True, 
@@ -230,15 +237,14 @@ def compilar_pdf(texto_bruto, nome_base="VadeMecum_Minerado", anos_destaque=None
         if os.path.exists(arquivo_pdf):
             return "sucesso", arquivo_pdf
             
-        # Se falhar, captura o arquivo .log que o LaTeX gera para sabermos o motivo real
-        arquivo_log = os.path.join(diretorio_atual, f"{nome_base}.log")
+        # Log de erro inteligente
+        arquivo_log = os.path.join(diretorio_base, f"{nome_base}.log")
         detalhe_erro = ""
         if os.path.exists(arquivo_log):
             with open(arquivo_log, "r", encoding="utf-8", errors="ignore") as l:
-                # Pega as últimas 30 linhas do log (onde o erro real do LaTeX fica guardado)
                 detalhe_erro = "\n".join(l.readlines()[-30:])
                 
-        return "erro", f"Erro na compilação do LaTeX no Windows.\n\nTrecho do Log:\n{detalhe_erro}\n\nSaída do terminal:\n{compilacao.stdout}"
+        return "erro", f"Erro no LaTeX.\n\nLog:\n{detalhe_erro}\n\nTerminal:\n{compilacao.stdout}"
         
     except Exception as e:
-        return "erro", f"Falha ao acionar o subprocesso pdflatex no Windows: {str(e)}"
+        return "erro", f"Falha de execução do subprocesso: {str(e)}"
