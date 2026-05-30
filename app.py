@@ -1,271 +1,113 @@
 import streamlit as st
-
 import os
-
 import base64
+import time
+from formatador import compilar_pdf, raspar_portal_planalto
 
-from datetime import datetime
+st.set_page_config(page_title="LAPEJURI Cloud", layout="wide", page_icon="⚖️")
+st.title("⚖️ Mineração em Lote - Novidades Legislativas (2024-2026)")
 
-import formatador
-
-import re
-
-
-
-st.set_page_config(page_title="LAPEJURI - LegalTech", page_icon="⚖️", layout="wide")
-
-
-
+# Seu dicionário de leis mapeadas
 MAPA_LEIS = {
-
-    "Código Penal (Decreto-Lei nº 2.848/40)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm",
-
-    "Código de Processo Penal (Decreto-Lei nº 3.689/41)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689.htm",
-
-    "Lei de Crimes Hediondos (Lei nº 8.072/90)": "https://www.planalto.gov.br/ccivil_03/leis/l8072.htm",
-
-    "Lei de Introdução às Normas do Direito Brasileiro (LINDB)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del4657compilado.htm"
-
+    "Código Penal (CP)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm",
+    "Código de Processo Penal (CPP)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689.htm",
+    "Lei de Crimes Hediondos": "https://www.planalto.gov.br/ccivil_03/leis/l8072.htm",
+    "LINDB": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del4657compilado.htm",
+    "Código Civil (CC)": "https://www.planalto.gov.br/ccivil_03/leis/2002/l10406compilada.htm"
 }
 
+if "pdf_pronto" not in st.session_state:
+    st.session_state.pdf_pronto = False
+if "pdf_bytes" not in st.session_state:
+    st.session_state.pdf_bytes = None
 
+# 📌 NOVO: Interface de Seleção Múltipla
+col1, col2 = st.columns([2, 1])
 
-if "logs" not in st.session_state:
-
-    st.session_state["logs"] = [{"timestamp": datetime.now().strftime("%H:%M:%S"), "texto": "Consola de auditoria inicializada.", "tipo": "Info"}]
-
-
-
-def registar_log(texto, tipo):
-
-    hora_atual = datetime.now().strftime("%H:%M:%S")
-
-    st.session_state["logs"].insert(0, {"timestamp": hora_atual, "texto": texto, "tipo": tipo})
-
-
-
-st.markdown("<h1 style='text-align: center; color: #1E293B;'>⚖️ Inteligência Documental - LAPEJURI</h1>", unsafe_allow_html=True)
-
-st.divider()
-
-
-
-col_esquerda, col_direita = st.columns([1, 1])
-
-
-
-with col_esquerda:
-
-    st.subheader("📥 Configuração da Coleta")
-
+with col1:
+    leis_selecionadas = st.multiselect(
+        "📚 Selecione as leis para compor o Vade Mecum (Pode escolher várias):",
+        options=list(MAPA_LEIS.keys()),
+        default=["Código Penal (CP)", "Código de Processo Penal (CPP)"]
+    )
     
-
-    fonte_opcao = st.radio(
-
-        "Como deseja inserir a legislação?", 
-
-        ["Capturar do Portal Planalto (Web Scraper)", "Colar Texto Bruto Manuscrito"],
-
-        horizontal=False
-
+    urls_livres = st.text_area(
+        "🔗 Ou cole URLs adicionais do Planalto (Uma por linha):",
+        placeholder="https://www.planalto.gov.br/..."
     )
 
+with col2:
+    anos = st.multiselect("Filtrar estritamente por:", ["2024", "2025", "2026"], default=["2024", "2025", "2026"])
+
+if st.button("🚀 Iniciar Mineração em Série e Compilar PDF", use_container_width=True):
     
-
-    url_final_scraping = ""
-
-    texto_entrada = ""
-
-    
-
-    if fonte_opcao == "Capturar do Portal Planalto (Web Scraper)":
-
-        opcao_lei = st.selectbox("Selecione um Diploma Cadastrado:", list(MAPA_LEIS.keys()) + ["Outro (Digitar link personalizado)"])
-
-        if opcao_lei == "Outro (Digitar link personalizado)":
-
-            url_final_scraping = st.text_input("Cole a URL do documento compilado do Planalto:", placeholder="https://www.planalto.gov.br/...")
-
-        else:
-
-            url_final_scraping = MAPA_LEIS[opcao_lei]
-
-            st.info(f"🔗 Link mapeado: `{url_final_scraping}`")
-
-            
-
-    elif fonte_opcao == "Colar Texto Bruto Manuscrito":
-
-        texto_entrada = st.text_area("Cole os artigos do Vade Mecum aqui:", height=200)
-
-
-
-    st.markdown("---")
-
-    st.subheader("📅 Filtro de Destaques")
-
-    anos_disponiveis = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027]
-
-    anos_selecionados = st.multiselect(
-
-        "Selecione as alterações de quais anos deseja envelopar em caixas cinzas (Notas):",
-
-        options=anos_disponiveis,
-
-        default=[2024, 2025, 2026]
-
-    )
-
-
-
-    # Botão perfeitamente alinhado com 4 espaços (dentro do with col_esquerda)
-
-    if st.button("🚀 Iniciar Coleta e Compilação Automática"):
-
-        if not anos_selecionados:
-
-            st.warning("⚠️ Selecione pelo menos um ano para servir de filtro de alterações.")
-
-        else:
-
-            if fonte_opcao == "Capturar do Portal Planalto (Web Scraper)":
-
-                if not url_final_scraping.strip():
-
-                    st.warning("⚠️ Insira uma URL válida do Planalto.")
-
-                else:
-
-                    with st.spinner("🕵️‍♂️ Robô minerando dados do Planalto..."):
-
-                        url_bruta = str(url_final_scraping)
-
-                        extrator = re.search(r'(https?://[^\s\]\)\'"]+)', url_bruta)
-
-                        
-
-                        if extrator:
-
-                            url_higienizada = extrator.group(1)
-
-                        else:
-
-                            url_higienizada = url_bruta.strip().replace('"', '').replace("'", "")
-
-                            url_higienizada = "".join(url_higienizada.split())
-
-                        
-
-                        registar_log(f"Acessando o endereço limpo: {url_higienizada}", "Scraping")
-
-                        texto_entrada = formatador.raspar_portal_planalto(url_higienizada)
-
-                        
-
-                        if texto_entrada.startswith("Erro"):
-
-                            st.error(texto_entrada)
-
-                            registar_log(texto_entrada, "Erro")
-
-                            texto_entrada = ""
-
-                        else:
-
-                            registar_log("Texto extraído com sucesso do Planalto.", "Sucesso")
-
-            
-
-            if texto_entrada.strip():
-
-                with st.spinner("⚙️ Compilando PDF via MiKTeX..."):
-
-                    registar_log(f"Compilando com destaques para os anos: {anos_selecionados}", "Info")
-
-                    status, resultado = formatador.compilar_pdf(
-
-                        texto_entrada, 
-
-                        nome_base="VadeMecum_Minerado", 
-
-                        anos_destaque=anos_selecionados
-
-                    )
-
-                    
-
-                    if status == "sucesso":
-
-                        st.success("🎉 Processo concluído com sucesso!")
-
-                        registar_log("Documento PDF gerado com sucesso.", "Sucesso")
-
-                        st.session_state["pdf_pronto"] = resultado
-
-                    else:
-
-                        st.error("🚨 Falha na compilação estrutural do LaTeX.")
-
-                        registar_log("Erro de compilação ou falta de executável pdflatex.", "Erro")
-
-                        st.text_area("Log Técnico de Erros:", value=resultado, height=200)
-
-            else:
-
-                st.warning("⚠️ Forneça uma string de texto ou execute o scraper com um link válido.")
-
-
-
-with col_direita:
-
-    st.subheader("📄 Painel de Resultados")
-
-    
-
-    if "pdf_pronto" in st.session_state and os.path.exists(st.session_state["pdf_pronto"]):
-
-        caminho_pdf = st.session_state["pdf_pronto"]
-
+    # 1. Montar a lista final de links para processar
+    lista_para_minerar = []
+    for lei in leis_selecionadas:
+        lista_para_minerar.append((lei, MAPA_LEIS[lei]))
         
+    for i, url in enumerate(urls_livres.split('\n')):
+        url = url.strip()
+        if url:
+            lista_para_minerar.append((f"Legislação Adicional {i+1}", url))
 
-        with open(caminho_pdf, "rb") as f_pdf:
-
-            dados_pdf = f_pdf.read()
-
-            st.download_button(
-
-                label="⬇️ Descarregar Arquivo PDF",
-
-                data=dados_pdf,
-
-                file_name="VadeMecum_LAPEJURI.pdf",
-
-                mime="application/pdf",
-
-                use_container_width=True
-
-            )
-
-        
-
-        base64_pdf = base64.b64encode(dados_pdf).decode('utf-8')
-
-        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="480" style="border:1px solid #64748B; border-radius:8px;"></iframe>'
-
-        st.markdown(pdf_display, unsafe_allow_html=True)
-
+    if not lista_para_minerar:
+        st.error("Selecione pelo menos uma lei ou insira uma URL válida.")
     else:
+        st.session_state.pdf_pronto = False
+        st.session_state.pdf_bytes = None
+        
+        lista_textos_extraidos = []
+        
+        # 2. Loop de Raspagem com Barra de Progresso
+        barra_progresso = st.progress(0)
+        status_texto = st.empty()
+        
+        total_leis = len(lista_para_minerar)
+        
+        for indice, (nome_lei, url_lei) in enumerate(lista_para_minerar):
+            status_texto.markdown(f"**Raspando {indice + 1}/{total_leis}:** {nome_lei}...")
+            
+            texto_bruto = raspar_portal_planalto(url_lei)
+            if texto_bruto.startswith("Erro"):
+                st.warning(f"⚠️ Falha ao ler {nome_lei}: {texto_bruto}")
+            else:
+                lista_textos_extraidos.append((nome_lei, texto_bruto))
+                
+            # Atualiza barra
+            barra_progresso.progress((indice + 1) / total_leis)
+            time.sleep(0.5) # Evita sobrecarga de requests no Planalto
+            
+        status_texto.empty()
+        
+        # 3. Compilação Unificada no LaTeX
+        if not lista_textos_extraidos:
+            st.error("Nenhum texto foi extraído com sucesso.")
+        else:
+            with st.spinner("Compilando PDF unificado de duas colunas... (Isso pode levar alguns segundos)"):
+                status, resultado = compilar_pdf(lista_textos_extraidos, nome_base="VadeMecum_Minerado", anos_destaque=anos)
+            
+            if status == "sucesso" and os.path.exists(resultado):
+                with open(resultado, "rb") as f:
+                    st.session_state.pdf_bytes = f.read()
+                st.session_state.pdf_pronto = True
+                st.success(f"🎉 PDF Gerado com sucesso! Contendo {len(lista_textos_extraidos)} leis compiladas juntas.")
+            else:
+                st.error("Erro técnico ao compilar o arquivo LaTeX.")
+                with st.expander("Ver Log do Servidor:"):
+                    st.code(resultado)
 
-        st.info("ℹ️ Aguardando processamento. Escolha a lei, ajuste os anos desejados e clique em Iniciar.")
-
-
-
+# Renderiza Resultados
+if st.session_state.pdf_pronto and st.session_state.pdf_bytes is not None:
     st.markdown("---")
-
-    st.subheader("📊 Trilha de Auditoria")
-
-    for log in st.session_state["logs"]:
-
-        badge = "🔴" if log["tipo"] == "Erro" else ("🟢" if log["tipo"] == "Sucesso" else "🔵")
-
-        st.markdown(f"<div style='background-color:#1b242e; border-left:4px solid #899ab3; padding:8px; margin-bottom:5px; font-family:monospace; font-size:0.85rem;'><b>[{log['timestamp']}] {badge} {log['tipo']}:</b> {log['texto']}</div>", unsafe_allow_html=True)
+    st.download_button(
+        label="📥 Baixar Vade Mecum Multi-Leis (PDF)",
+        data=st.session_state.pdf_bytes,
+        file_name="VadeMecum_LAPEJURI_Lote.pdf",
+        mime="application/pdf",
+        use_container_width=True
+    )
+    
+    base64_pdf = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" style="border:1px solid #64748B; border-radius:8px;"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
