@@ -6,196 +6,174 @@ import requests
 from bs4 import BeautifulSoup
 
 def raspar_portal_planalto(url):
-    """Faz o Web Scraping em tempo real do portal do Planalto."""
     try:
         url_limpa = str(url).strip().replace('"', '').replace("'", "").replace('`', '')
         url_limpa = url_limpa.replace('\n', '').replace('\r', '').replace('\t', '')
         url_limpa = "".join(url_limpa.split())
         
         if not url_limpa.lower().startswith("http"):
-            return f"Erro: A URL fornecida não é válida: '{url_limpa}'"
+            return "Erro: A URL fornecida não é válida."
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
         resposta = requests.get(url_limpa, headers=headers, timeout=20)
-        
-        if resposta.encoding in ['ISO-8859-1', 'iso-8859-1']:
-            resposta.encoding = 'iso-8859-1'
-        else:
-            resposta.encoding = 'utf-8'
+        resposta.encoding = 'utf-8' if resposta.encoding not in ['ISO-8859-1', 'iso-8859-1'] else 'iso-8859-1'
         
         if resposta.status_code != 200:
             return f"Erro: Status Code: {resposta.status_code}"
             
         soup = BeautifulSoup(resposta.text, 'html.parser')
-        paragrafos = soup.find_all(['p', 'span', 'font'])
-        linhas_texto = []
-        
-        for p in paragrafos:
-            texto_linha = p.get_text().strip()
-            if texto_linha:
-                texto_linha = re.sub(r'\s+', ' ', texto_linha)
-                linhas_texto.append(texto_linha)
-                
-        if not linhas_texto:
-            return "Erro: O scraper não conseguiu extrair blocos de texto."
-            
-        return "\n".join(linhas_texto)
+        linhas_texto = [p.get_text().strip() for p in soup.find_all(['p', 'span', 'font']) if p.get_text().strip()]
+        return "\n".join(linhas_texto) if linhas_texto else "Erro: Não foi possível extrair dados."
     except Exception as e:
         return f"Erro de conexão: {str(e)}"
 
-def limpar_texto_para_latex(texto):
-    if not texto:
-        return ""
-    texto = unicodedata.normalize('NFC', texto)
-    texto = texto.replace('\u0096', '-').replace('\x96', '-').replace('—', '-').replace('–', '-')
-    texto = texto.replace('\x93', '"').replace('\x94', '"').replace('\u0093', '"').replace('\u0094', '"')
-    texto = texto.replace('“', '"').replace('”', '"').replace('\x91', "'").replace('\x92', "'")
-    texto = texto.replace('‘', "'").replace('’', "'").replace('\xa0', ' ')
-    return texto
-
 def escapar_caracteres_latex(texto):
-    """Blindagem total contra caracteres especiais que quebram o compilador LaTeX."""
-    if not texto:
-        return ""
+    if not texto: return ""
+    texto = unicodedata.normalize('NFC', texto)
+    texto = "".join(ch for ch in texto if unicodedata.category(ch)[0] != "C" or ch == '\n')
+    texto = texto.replace('—', '-').replace('–', '-').replace('“', '"').replace('”', '"').replace('‘', "'").replace('’', "'")
+    
     texto = texto.replace('\\', r'\textbackslash{}')
-    texto = texto.replace('$', r'\$')
-    texto = texto.replace('%', r'\%')
-    texto = texto.replace('&', r'\&')
-    texto = texto.replace('#', r'\#')
-    texto = texto.replace('_', r'\_')
-    texto = texto.replace('{', r'\{')
-    texto = texto.replace('}', r'\}')
-    texto = texto.replace('^', r'\^{}')
-    texto = texto.replace('~', r'\~{}')
+    texto = texto.replace('$', r'\$').replace('%', r'\%').replace('&', r'\&')
+    texto = texto.replace('#', r'\#').replace('_', r'\_').replace('{', r'\{')
+    texto = texto.replace('}', r'\}').replace('^', r'\^{}').replace('~', r'\~{}')
     return texto
-
-def limpar_linhas_duplicadas(texto_bruto):
-    texto_sanitizado = limpar_texto_para_latex(texto_bruto)
-    linhas = texto_sanitizado.split('\n')
-    linhas_limpas = []
-    for copy_linha in linhas:
-        if "googleusercontent.com" in copy_linha or "immersive_entry_chip" in copy_linha:
-            continue
-        linha_tratada = re.sub(r'^↳\s*\[Nota\]\s*', '', copy_linha).strip()
-        if not linha_tratada or (linhas_limpas and linhas_limpas[-1] == linha_tratada):
-            continue
-        linhas_limpas.append(linha_tratada)
-    return linhas_limpas
 
 def formatar_codigo_penal_para_latex(texto_bruto, anos_destaque=None):
-    if anos_destaque is None:
-        anos_destaque = ['2024', '2025', '2026']
+    years = ['2024', '2025', '2026'] if anos_destaque is None else [str(a) for a in anos_destaque]
+    padrao_anos = re.compile(r'\b(' + '|'.join(years) + r')\b')
     
-    anos_str = [str(ano) for ano in anos_destaque]
-    padrao_anos = re.compile(r'\b(' + '|'.join(anos_str) + r')\b')
-    
-    linhas = limpar_linhas_duplicadas(texto_bruto)
+    linhas = texto_bruto.split('\n')
     
     documento_latex = [
-        r"\documentclass[10pt,a4paper,twocolumn]{article}",
+        r"\documentclass[9pt,a4paper,twocolumn]{article}",
         r"\usepackage[T1]{fontenc}",
         r"\usepackage[utf8]{inputenc}",
         r"\usepackage[brazilian]{babel}",
-        r"\usepackage[top=2cm,bottom=2cm,left=1.2cm,right=1.2cm]{geometry}",
-        r"\usepackage{enumitem}",
+        r"\usepackage[top=1.5cm,bottom=1.5cm,left=1.0cm,right=1.0cm]{geometry}",
         r"\usepackage[most]{tcolorbox}",
-        r"\usepackage{titlesec}",
+        r"\usepackage{enumitem}",
         r"\sloppy",
-        "",
-        r"\newtcolorbox{notalegislativa}{colback=gray!8,colframe=gray!60,arc=1mm,boxrule=0.6pt,left=2mm,right=2mm,top=1.5mm,bottom=1.5mm}",
-        "",
-        r"\title{\textbf{Vade Mecum de Novidades Legislativas}}",
-        r"\author{Laboratório de Pesquisa Empírica, Jurimetria e IA}",
-        r"\date{\today}",
+        
+        # Configuração da Caixa Estilizada de Alta Performance
+        r"\newtcolorbox{caixaartigo}[1]{",
+        r"  colback=gray!4,colframe=slateheading!60!black,coltitle=white,",
+        r"  fonttitle=\bfseries\small,title={#1},",
+        r"  arc=1.0mm,boxrule=0.6pt,left=2mm,right=2mm,top=1.5mm,bottom=1.5mm,",
+        r"  before skip=3mm,after skip=3mm,breakable",
+        r"}",
+        
+        r"\definecolor{slateheading}{rgb}{0.18, 0.24, 0.35}",
+        r"\title{\textbf{\Large Vade Mecum de Novidades Legislativas}\\\xsmall{Compilação Estruturada LAPEJURI (2024-2026)}}",
+        r"\author{\small Laboratório de Pesquisa Empírica, Jurimetria e IA}",
+        r"\date{\small\today}",
         r"\begin{document}",
         r"\maketitle",
-        r"\newpage",
-        ""
+        r"\setlength{\columnsep}{18pt}",
     ]
 
-    articles = []
-    current_article = {"header": None, "headings": [], "paragraphs": [], "has_year": False}
-    active_headings = []
+    # Memorizadores de estrutura hierárquica ativa
+    livro_atual = ""
+    titulo_atual = ""
+    capitulo_atual = ""
+    
+    artigos_processados = []
+    artigo_foco = None
+
+    # Regex estruturais do Planalto
+    reg_livro = re.compile(r'^(LIVRO\s+[IVXLCDM]+)', re.IGNORECASE)
+    reg_titulo = re.compile(r'^(TÍTULO\s+[IVXLCDM]+)', re.IGNORECASE)
+    reg_capitulo = re.compile(r'^(CAPÍTULO\s+[IVXLCDM]+)', re.IGNORECASE)
+    reg_artigo = re.compile(r'^Art\.\s*([\d\w-]+)', re.IGNORECASE)
 
     for linha in linhas:
-        if any(t in linha for t in ["TÍTULO", "CAPÍTULO", "SEÇÃO"]):
-            if "TÍTULO" in linha: active_headings = [linha]
-            elif "CAPÍTULO" in linha: active_headings = [h for h in active_headings if "TÍTULO" in h] + [linha]
-            elif "SEÇÃO" in linha: active_headings = [h for h in active_headings if "TÍTULO" in h or "CAPÍTULO" in h] + [linha]
-        elif re.match(r'^Art\.\s*', linha):
-            if current_article["header"] or current_article["paragraphs"]:
-                articles.append(current_article)
-            current_article = {
-                "header": linha, 
-                "headings": list(active_headings), 
-                "paragraphs": [], 
-                "has_year": bool(padrao_anos.search(linha))
+        linha = linha.strip()
+        if not linha or "googleusercontent" in linha or "immersive_entry" in linha: continue
+        
+        # Captura herança de cabeçalhos sem renderizar imediatamente
+        if reg_livro.match(linha):
+            livro_atual = linha
+            continue
+        if reg_titulo.match(linha):
+            titulo_atual = linha
+            capitulo_atual = "" # limpa o subnível
+            continue
+        if reg_capitulo.match(linha):
+            capitulo_atual = linha
+            continue
+            
+        # Detectou novo artigo
+        if reg_artigo.match(linha):
+            if artigo_foco:
+                artigos_processados.append(artigo_foco)
+            artigo_foco = {
+                "livro": livro_atual,
+                "titulo": titulo_atual,
+                "capitulo": capitulo_atual,
+                "caput": linha,
+                "paragrafos": [],
+                "relevante": bool(padrao_anos.search(linha))
             }
         else:
-            if current_article["header"] is None: continue
-            has_yr = bool(padrao_anos.search(linha))
-            current_article["paragraphs"].append({"text": linha, "has_year": has_yr})
-            if has_yr:
-                current_article["has_year"] = True
+            if artigo_foco is None: continue
+            tem_ano = bool(padrao_anos.search(linha))
+            artigo_foco["paragrafos"].append({"texto": linha, "relevante": tem_ano})
+            if tem_ano:
+                artigo_foco["relevante"] = True
 
-    if current_article["header"] or current_article["paragraphs"]:
-        articles.append(current_article)
+    if artigo_foco:
+        artigos_processados.append(artigo_foco)
 
-    buffer_linhas = []
-    printed_headings = set()
+    # Renderização Inteligente no LaTeX
+    ultimo_livro_impresso = ""
+    ultimo_titulo_impresso = ""
+    ultimo_capitulo_impresso = ""
 
-    for art in articles:
-        if not art["has_year"]:
-            continue
+    for art in artigos_processados:
+        if not art["relevante"]: continue # Ignora artigos intocados no período
         
-        # FILTRO DE CORTE CIRÚRGICO INTERNO
-        paragrafos_recentes = [p for p in art["paragraphs"] if p["has_year"]]
-        header_tem_ano = bool(padrao_anos.search(art["header"]))
-        
-        if not paragrafos_recentes and not header_tem_ano:
-            continue
-
-        for heading in art["headings"]:
-            if heading not in printed_headings:
-                heading_esc = escapar_caracteres_latex(heading)
-                buffer_linhas.append(f"\n\\begin{{center}}\\vspace{{0.1cm}}\\textbf{{\\small {heading_esc}}}\\end{{center}}\n")
-                printed_headings.add(heading)
-        
-        match_art = re.match(r'^Art\.\s*([0-9]+[-A-Z]*)\s*[\.-]?\s*(.*)', art["header"])
-        if match_art:
-            art_num = match_art.group(1)
-            art_texto = match_art.group(2)
-            buffer_linhas.append(f"\n\\subsection*{{Art. {art_num}}}")
-            buffer_linhas.append("\\begin{notalegislativa}")
+        # Se mudou de Livro/Título/Capítulo, imprime os metadados centralizados fora da caixa
+        if art["livro"] and art["livro"] != ultimo_livro_impresso:
+            documento_latex.append(f"\n\\section*{{\\centering \\color{{slateheading}}\\normalsize {escapar_caracteres_latex(art['livro'])}}}")
+            ultimo_livro_impresso = art["livro"]
             
-            # Só exibe o caput se ele contiver a mudança recente explicita
-            if header_tem_ano and art_texto:
-                art_texto_esc = escapar_caracteres_latex(art_texto)
-                buffer_linhas.append(f"{art_texto_esc} \\\\")
-        else:
-            header_esc = escapar_caracteres_latex(art["header"])
-            buffer_linhas.append(f"\n\\subsection*{{{header_esc}}}")
-            buffer_linhas.append("\\begin{notalegislativa}")
+        if art["titulo"] and art["titulo"] != ultimo_titulo_impresso:
+            documento_latex.append(f"\n\\subsection*{{\\centering \\color{{slateheading}}\\small {escapar_caracteres_latex(art['titulo'])}}}")
+            ultimo_titulo_impresso = art["titulo"]
+            
+        if art["capitulo"] and art["capitulo"] != ultimo_capitulo_impresso:
+            documento_latex.append(f"\n\\subsubsection*{{\\centering \\small \\textit{{{escapar_caracteres_latex(art['capitulo'])}}}}}")
+            ultimo_capitulo_impresso = art["capitulo"]
 
-        # Adiciona APENAS as linhas que possuem o ano alvo dentro da caixa cinza
-        for p in paragrafos_recentes:
-            linha_esc = escapar_caracteres_latex(p["text"])
-            if p["text"].startswith("Pena"):
-                linha_formatada = re.sub(r'^\s*Pena\s*[-–]\s*(.*)', r'\\noindent \\textbf{Pena -} \1', linha_esc)
-                buffer_linhas.append(f"    {linha_formatada} \\\\")
-            else:
-                buffer_linhas.append(f"\\noindent {linha_esc} \\\\")
+        # Determina o título da Caixa (O número do Artigo)
+        match_art = reg_artigo.match(art["caput"])
+        num_artigo = f"Artigo {match_art.group(1)}" if match_art else "Artigo"
         
-        buffer_linhas.append("\\end{notalegislativa}")
+        documento_latex.append(f"\\begin{{caixaartigo}}{{{num_artigo}}}")
+        
+        # Imprime o Caput sempre no topo interno da caixa
+        caput_esc = escapar_caracteres_latex(art["caput"])
+        documento_latex.append(f"\\textbf{{{caput_esc}}} \\\\[1mm]")
+        
+        # Listagem interna dos incisos, parágrafos e alíneas com endentação limpa
+        if art["paragrafos"]:
+            documento_latex.append("\\begin{description}[leftmargin=1.5mm, labelindent=0mm, itemsep=1mm]")
+            for p in art["paragrafos"]:
+                p_esc = escapar_caracteres_latex(p["texto"])
+                
+                # Se o parágrafo foi modificado no período, recebe um destaque em negrito sutil na cor
+                if p["relevante"]:
+                    documento_latex.append(f"\\item[] \\strut {p_esc}")
+                else:
+                    documento_latex.append(f"\\item[] \\small \\color{{gray!90}} {p_esc}")
+            documento_latex.append("\\end{description}")
+            
+        documento_latex.append("\\end{caixaartigo}\n")
 
-    documento_latex.extend(buffer_linhas)
     documento_latex.append("\n\\end{document}")
     return "\n".join(documento_latex)
 
 def compilar_pdf(texto_bruto, nome_base="VadeMecum_Minerado", anos_destaque=None):
-    # Detecta o Sistema Operacional: usa /tmp no Linux (Nuvem) e a pasta local no Windows
     if os.name != 'nt':
         diretorio_base = "/tmp"
     else:
@@ -209,7 +187,6 @@ def compilar_pdf(texto_bruto, nome_base="VadeMecum_Minerado", anos_destaque=None
     with open(arquivo_tex, "w", encoding="utf-8") as f:
         f.write(codigo_tex)
         
-    # Comandos base aceitos universalmente (Windows e Linux)
     comando = [
         "pdflatex", 
         "-interaction=nonstopmode", 
@@ -218,33 +195,22 @@ def compilar_pdf(texto_bruto, nome_base="VadeMecum_Minerado", anos_destaque=None
         arquivo_tex
     ]
     
-    # Só adiciona o bloqueio de janelas pop-up se estiver rodando no Windows
     if os.name == 'nt':
         comando.insert(3, "-screendialogs=no")
         
     try:
-        # Roda o LaTeX nativamente ocultando janelas no Windows
         compilacao = subprocess.run(
-            comando, 
-            capture_output=True, 
-            text=True, 
-            encoding="utf-8", 
-            errors="ignore", 
-            timeout=60,
+            comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=60,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         )
-        
         if os.path.exists(arquivo_pdf):
             return "sucesso", arquivo_pdf
             
-        # Log de erro inteligente
         arquivo_log = os.path.join(diretorio_base, f"{nome_base}.log")
         detalhe_erro = ""
         if os.path.exists(arquivo_log):
             with open(arquivo_log, "r", encoding="utf-8", errors="ignore") as l:
                 detalhe_erro = "\n".join(l.readlines()[-30:])
-                
-        return "erro", f"Erro no LaTeX.\n\nLog:\n{detalhe_erro}\n\nTerminal:\n{compilacao.stdout}"
-        
+        return "erro", f"Log:\n{detalhe_erro}\n\nTerminal:\n{compilacao.stdout}"
     except Exception as e:
-        return "erro", f"Falha de execução do subprocesso: {str(e)}"
+        return "erro", f"Falha de execução: {str(e)}"
