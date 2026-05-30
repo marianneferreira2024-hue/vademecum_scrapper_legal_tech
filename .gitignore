@@ -1,0 +1,56 @@
+# ==========================================
+# 🐍 PYTHON Caches e Ambientes Virtuais
+# ==========================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+.pytest_cache/
+.egs/
+*.egg-info/
+
+# ==========================================
+# 🎈 STREAMLIT (Segurança e Logs)
+# ==========================================
+.streamlit/secrets.toml
+.streamlit/runtime/
+# Descomente a linha abaixo se NÃO quiser salvar as configurações de tema no GitHub:
+# .streamlit/config.toml
+
+# ==========================================
+# 📄 LAOTEX / MiKTeX (MUITO IMPORTANTE!)
+# Ignora todos os ficheiros auxiliares de compilação
+# ==========================================
+*.aux
+*.log
+*.toc
+*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.blg
+*.bbl
+*.lof
+*.lot
+*.pdfsync
+*.venv/
+*venv/
+
+# ==========================================
+# 📥 OUTPUTS DO APLICATIVO (Ficheiros Gerados)
+# Evita enviar PDFs e códigos intermédios gerados pelo robô
+# ==========================================
+*.pdf
+VadeMecum_Minerado.tex
+relatorio_final.tex
+
+# ==========================================
+# 🖥️ SISTEMA OPERATIVO E IDEs (Windows/VS Code)
+# ==========================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
