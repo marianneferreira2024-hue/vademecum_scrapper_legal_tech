@@ -36,27 +36,20 @@ def raspar_portal_planalto(url):
             
         soup = BeautifulSoup(resposta.text, 'html.parser')
         
-        # 1. DESTRUIDOR DE LIXO GOVERNAMENTAL
-        # Removemos todos os textos riscados (revogados que sujam a leitura)
         for tag in soup.find_all(['strike', 'del', 's']):
             tag.decompose()
             
-        # Transformamos as quebras de linha web em reais
         for br in soup.find_all('br'):
             br.replace_with('\n')
             
         paragrafos = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4'])
         linhas_texto = []
         for p in paragrafos:
-            # Captura o texto
             texto = p.get_text(separator=' ', strip=True)
-            # Limpa espaços excessivos
             texto = re.sub(r'[ \t\r\f\v]+', ' ', texto) 
             
-            # Corta em quebras de linha e adiciona à lista
             for linha in texto.split('\n'):
                 linha = linha.strip()
-                # Ignora linhas minúsculas demais ou assinaturas
                 if linha and len(linha) > 4 and not linha.startswith("Mensagem de"):
                     linhas_texto.append(linha)
                     
@@ -80,14 +73,11 @@ def higienizar_unicodes(texto):
         
     texto = re.sub(r'[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]', '', texto)
     
-    # BISTURI DE DESCOLAGEM 2.0 (Mais inteligente)
-    # Garante que artigos e parágrafos começam numa linha nova
     texto = re.sub(r'(?<=\S)\s+(Art\.\s*\d)', r'\n\1', texto)
     texto = re.sub(r'(?<=\S)\s+(§\s*\d)', r'\n\1', texto)
     texto = re.sub(r'(?<=\S)\s+(Parágrafo único)', r'\n\1', texto)
     texto = re.sub(r'(?<=\S)\s+(Pena\s*[-–])', r'\n\1', texto)
     
-    # Descola os números seguidos de letras (Art. 147-APerseguir -> Art. 147-A Perseguir)
     texto = re.sub(r'(Art\.\s*\d+[-A-Za-z0-9ºª]*[\.\-]?)([A-Z])', r'\1 \2', texto)
     texto = re.sub(r'(§\s*\d+[\sºoª\.]*)([A-Z])', r'\1 \2', texto)
     
@@ -125,7 +115,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
 
         for l in texto_limpo.split('\n'):
             l = l.strip()
-            # Ignora linhas de lixo que sobraram
             if not l or "googleusercontent.com" in l or "immersive_entry_chip" in l or l == "Vigência" or l == "Produção de efeitos":
                 continue
             
@@ -159,10 +148,9 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                         if match_ali:
                             token = {'tipo': 'ALINEA', 'nome': match_ali.group(1).strip(), 'resto': match_ali.group(2).strip()}
                         else:
-                            # COLA SEMÂNTICA BLINDADA
                             is_pena = l.lower().startswith('pena')
-                            # Só gruda notas se começarem de facto com parênteses
-                            is_nota_rodape = bool(re.match(r'^\((Lei|Redação|Incluído|Vide|Revogado).*?\)', l))
+                            # COLA SEMÂNTICA 3.0: Mais agressiva a colar as notas aos Incisos
+                            is_nota_rodape = bool(re.search(r'^\s*[\(\[]?(Lei|Redação|Incluído|Vide|Revogado|Acrescentado)', l, re.IGNORECASE))
                             is_continuacao = l[0].islower() or l.startswith(',') or l.startswith(';')
                             
                             if linhas_validas and not is_pena and (is_continuacao or is_nota_rodape):
@@ -174,7 +162,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                                     linhas_validas[-1]['texto'] = (linhas_validas[-1]['texto'] + " " + l).strip()
                                     continue
                             
-                            # Se não colou em ninguém, vira TEXTO solto (ex: Rubricas de capítulos que o governo faz mal)
                             token = {'tipo': 'TEXTO', 'texto': l}
 
             if token:
@@ -197,7 +184,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         texto_caput = b['artigo'].get('nome', '') + " " + b['artigo'].get('resto', '')
         caput_tem_ano = any(ano in texto_caput for ano in anos_alvo)
         
-        # Expressão que deteta se o caput sofreu uma alteração nos anos foco
         regex_novo = rf'\((Incluído|Acrescentado|Inserido|Redação dada).*?({regex_anos})\)'
         caput_novo_integral = caput_tem_ano and re.search(regex_novo, texto_caput, re.IGNORECASE)
         
@@ -207,31 +193,51 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             itens_para_manter = set()
             idx_paragrafo_atual = -1
             idx_inciso_atual = -1
+            idx_alinea_atual = -1
+            ultimo_estrutural = -1
             
             for i, c in enumerate(b['conteudo']):
                 tipo = c['tipo']
                 if tipo == 'PARAGRAFO': 
                     idx_paragrafo_atual = i
                     idx_inciso_atual = -1 
+                    idx_alinea_atual = -1
+                    ultimo_estrutural = i
                 elif tipo == 'INCISO': 
                     idx_inciso_atual = i
+                    idx_alinea_atual = -1
+                    ultimo_estrutural = i
+                elif tipo == 'ALINEA':
+                    idx_alinea_atual = i
+                    ultimo_estrutural = i
 
                 texto_c = c.get('nome', '') + " " + c.get('resto', '') + " " + c.get('texto', '')
                 is_pena = (tipo == 'TEXTO' and texto_c.strip().lower().startswith('pena'))
                 
-                # Regra: se o item tem o ano, entra na lista!
+                # PROTOCOLO DE RESGATE ESTRUTURAL
+                # Se a linha atual tem o ano (mesmo que seja só uma nota solta), mantemos ela!
                 if any(ano in texto_c for ano in anos_alvo) or (caput_tem_ano and is_pena):
                     itens_para_manter.add(i)
-                    if tipo == 'ALINEA' and idx_inciso_atual != -1:
-                        itens_para_manter.add(idx_inciso_atual)
-                        if idx_paragrafo_atual != -1:
-                            itens_para_manter.add(idx_paragrafo_atual)
-                    elif tipo == 'INCISO' and idx_paragrafo_atual != -1:
-                        itens_para_manter.add(idx_paragrafo_atual)
+                    
+                    # E puxamos também os pais deste elemento para não o deixar órfão!
+                    if tipo == 'ALINEA':
+                        if idx_inciso_atual != -1: itens_para_manter.add(idx_inciso_atual)
+                        if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
+                    elif tipo == 'INCISO':
+                        if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
+                    elif tipo == 'TEXTO':
+                        # Se a nota de alteração estava solta, resgatamos o Inciso/Alinea de cima!
+                        if ultimo_estrutural != -1:
+                            itens_para_manter.add(ultimo_estrutural)
+                            parent_tipo = b['conteudo'][ultimo_estrutural]['tipo']
+                            if parent_tipo == 'ALINEA':
+                                if idx_inciso_atual != -1: itens_para_manter.add(idx_inciso_atual)
+                                if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
+                            elif parent_tipo == 'INCISO':
+                                if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
 
             sub_itens_alterados = [c for i, c in enumerate(b['conteudo']) if i in itens_para_manter]
         
-        # Se nem o caput nem os subitens têm os anos alvo, descarta o artigo inteiro
         if not caput_tem_ano and len(sub_itens_alterados) == 0:
             continue
             
