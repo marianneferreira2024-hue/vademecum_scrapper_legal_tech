@@ -47,27 +47,39 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     padrao_anos = re.compile(r'\b(' + '|'.join(years) + r')\b')
     
     documento_latex = [
-        r"\documentclass[9pt,a4paper,twocolumn]{article}",
+        r"\documentclass[10pt,a4paper,twocolumn]{article}",
         r"\usepackage[T1]{fontenc}",
         r"\usepackage[utf8]{inputenc}",
         r"\usepackage[brazilian]{babel}",
-        r"\usepackage[top=1.5cm,bottom=1.5cm,left=1.0cm,right=1.0cm]{geometry}",
+        r"\usepackage[top=2cm,bottom=2cm,left=1.3cm,right=1.3cm]{geometry}",
         r"\usepackage[most]{tcolorbox}",
         r"\usepackage{enumitem}",
+        r"\usepackage{microtype}",
         r"\sloppy",
+        
         r"\newtcolorbox{caixaartigo}[1]{",
+        r"  enhanced, width=\linewidth, breakable,",
         r"  colback=gray!4,colframe=slateheading!60!black,coltitle=white,",
         r"  fonttitle=\bfseries\small,title={#1},",
         r"  arc=1.0mm,boxrule=0.6pt,left=2mm,right=2mm,top=1.5mm,bottom=1.5mm,",
-        r"  before skip=3mm,after skip=3mm,breakable",
+        r"  before skip=3mm,after skip=3mm",
         r"}",
+        
         r"\definecolor{slateheading}{rgb}{0.18, 0.24, 0.35}",
         r"\definecolor{lawtitle}{rgb}{0.1, 0.15, 0.25}",
-        r"\title{\textbf{\Large Vade Mecum de Novidades Legislativas}\\\small{Compilação Estruturada LAPEJURI}}",
+        
+        r"\addto\captionsbrazilian{\renewcommand{\contentsname}{Sumário das Novidades Legislativas}}",
+        
+        # AQUI ESTÁ A CORREÇÃO PRINCIPAL: \small em vez de \xsmall
+        r"\title{\textbf{\Large Vade Mecum de Novidades Legislativas}\\{\small Compilação Estruturada LAPEJURI}}",
         r"\author{\small Laboratório de Pesquisa Empírica, Jurimetria e IA}",
         r"\date{\small\today}",
         r"\begin{document}",
         r"\maketitle",
+        
+        r"\tableofcontents",
+        r"\vspace{5mm}\hrule\vspace{5mm}",
+        
         r"\setlength{\columnsep}{18pt}",
     ]
 
