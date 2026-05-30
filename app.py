@@ -2,12 +2,17 @@ import streamlit as st
 import os
 import base64
 from datetime import datetime
-import formatador
 import re
 import time
+import importlib
+
+# ISTO DESTRÓI O CACHE DO STREAMLIT E FORÇA A LER A VERSÃO NOVA DO FORMATADOR!
+import formatador
+importlib.reload(formatador)
 
 st.set_page_config(page_title="LAPEJURI - LegalTech", page_icon="⚖️", layout="wide")
 
+# ... (MANTENHA O SEU CÓDIGO app.py IGUAL ATÉ À ZONA DO BOTÃO INICIAR) ...
 MAPA_LEIS = {
     "Código Penal (Decreto-Lei nº 2.848/40)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm",
     "Código de Processo Penal (Decreto-Lei nº 3.689/41)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689.htm",
@@ -144,8 +149,7 @@ with col_esquerda:
                         fila_compilacao.append((nome_lei, texto_extraido))
                     
                     barra_progresso.progress((i + 1) / total_itens)
-                    time.sleep(0.3)
-                    
+                    time.sleep(2.5)  # Delay para evitar bloqueios
                 status_coleta.empty()
                 barra_progresso.empty()
             else:
