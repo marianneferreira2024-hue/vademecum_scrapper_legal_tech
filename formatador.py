@@ -228,10 +228,10 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     documento_latex.append(r"\begin{document}")
     
     # Capa / Cabeçalho mesclando as duas colunas
-    documento_latex.append(r"\twocolumn[")
-    documento_latex.append(r"  \begin{center}{\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\\[0.2cm]")
-    documento_latex.append(r"  {\large Atualizações de " + " a ".join(anos_alvo) + r"}\\[0.6cm]\end{center}")
-    documento_latex.append(r"]")
+    documento_latex.append(r"\twocolumn[{")
+    documento_latex.append(r"  \begin{center}{\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\par\vspace{0.2cm}")
+    documento_latex.append(r"  {\large Atualizações: " + ", ".join(anos_alvo) + r"}\par\vspace{0.6cm}\end{center}")
+    documento_latex.append(r"}]")
     
     documento_latex.append(r"\renewcommand{\contentsname}{Índice de Leis e Artigos Alterados}")
     documento_latex.append(r"\tableofcontents\vspace{0.6cm}\hrule\vspace{0.4cm}")
@@ -249,9 +249,9 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             
             # Quando inicia uma lei nova, vai para uma nova página limpa
             documento_latex.append(r"\clearpage")
-            documento_latex.append(r"\twocolumn[")
+            documento_latex.append(r"\twocolumn[{")
             documento_latex.append(f"  \\begin{{center}}\\vspace{{0.5cm}}\\noindent\\textbf{{\\LARGE {texto_lei}}}\\par\\vspace{{0.2cm}}\\hrule\\vspace{{0.4cm}}\\end{{center}}")
-            documento_latex.append(r"]")
+            documento_latex.append(r"}]")
             
             documento_latex.append(r"\phantomsection")
             # Usa o nome simples para evitar bugar o sumário
