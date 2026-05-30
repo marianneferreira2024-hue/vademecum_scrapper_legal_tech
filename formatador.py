@@ -6,14 +6,14 @@ import requests
 from bs4 import BeautifulSoup
 
 def raspar_portal_planalto(url):
-    """Faz o Web Scraping em tempo real do portal do Planalto."""
+    """Faz o Web Scraping eliminando as duplicações de tags aninhadas."""
     try:
         url_limpa = str(url).strip().replace('"', '').replace("'", "").replace('`', '')
         url_limpa = url_limpa.replace('\n', '').replace('\r', '').replace('\t', '')
         url_limpa = "".join(url_limpa.split())
         
         if not url_limpa.lower().startswith("http"):
-            return f"Erro: A URL fornecida não é válida."
+            return "Erro: A URL fornecida não é válida."
 
         headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
         resposta = requests.get(url_limpa, headers=headers, timeout=20)
@@ -23,8 +23,16 @@ def raspar_portal_planalto(url):
             return f"Erro: Status Code: {resposta.status_code}"
             
         soup = BeautifulSoup(resposta.text, 'html.parser')
-        paragrafos = soup.find_all(['p', 'span', 'font'])
-        linhas_texto = [re.sub(r'\s+', ' ', p.get_text().strip()) for p in paragrafos if p.get_text().strip()]
+        
+        # CORREÇÃO CRÍTICA: Buscar apenas 'p' e 'h'. Se buscarmos 'span', o código duplica o texto!
+        paragrafos = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4'])
+        
+        linhas_texto = []
+        for p in paragrafos:
+            texto = p.get_text(separator=' ', strip=True)
+            texto = re.sub(r'\s+', ' ', texto)
+            if texto and len(texto) > 2:
+                linhas_texto.append(texto)
                 
         if not linhas_texto:
             return "Erro: O scraper não conseguiu extrair blocos de texto."
@@ -53,13 +61,6 @@ def limpar_texto_latex(texto):
     texto = re.sub(r'(\((?:Redação dada|Incluído|Vide|Revogado|Acrescentado).*?\))', r'\\textit{\1}', texto)
     return texto
 
-def verificador_pre_compilacao_latex(codigo_latex):
-    codigo_latex = re.sub(r'\\begin\{artigoBox\}\{[^\}]*\}\s*\\end\{artigoBox\}', '', codigo_latex)
-    codigo_latex = re.sub(r'\\begin\{multicols\}\{2\}\s*\\end\{multicols\}', '', codigo_latex)
-    codigo_latex = re.sub(r'(\\par\\vspace\{\d+pt\}\s*){2,}', r'\\par\\vspace{2pt}\n', codigo_latex)
-    codigo_latex = re.sub(r'(\\vspace\{\d+\.\d+cm\}\s*){2,}', r'\\vspace{0.3cm}\n', codigo_latex)
-    return codigo_latex
-
 def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     if anos_destaque is None:
         anos_destaque = ['2024', '2025', '2026']
@@ -68,9 +69,8 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     
     blocos_brutos_totais = []
 
-    # 🔴 FASE 1 e 2: TOKENIZAÇÃO E AGRUPAMENTO HIERÁRQUICO POR LEI
+    # FASE 1 e 2: TOKENIZAÇÃO E AGRUPAMENTO
     for nome_lei, texto_bruto in lista_leis:
-        # Injeta o nome da lei como âncora para a lógica de tokens
         texto_completo = f"# {nome_lei}\n" + texto_bruto
         texto_limpo = higienizar_unicodes(texto_completo)
         
@@ -107,7 +107,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 linhas_validas.append({'tipo': 'ALINEA', 'nome': match_ali.group(1).strip(), 'resto': match_ali.group(2).strip()})
                 continue
                 
-            # A SUPER-COLA SEMÂNTICA
             is_pena = l.lower().startswith('pena')
             if linhas_validas and not is_pena:
                 ultimo_tipo = linhas_validas[-1]['tipo']
@@ -120,7 +119,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             
             linhas_validas.append({'tipo': 'TEXTO', 'texto': l})
 
-        # Agrupamento (Fase 2)
         bloco_artigo_atual = None
         for token in linhas_validas:
             if token['tipo'] in ['ESTRUTURA', 'NOME_LEI']:
@@ -138,9 +136,8 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         if bloco_artigo_atual:
             blocos_brutos_totais.append(bloco_artigo_atual)
 
-    # 🟢 FASE 3: O BISTURI CIRÚRGICO
+    # FASE 3: BISTURI CIRÚRGICO
     blocos_filtrados = []
-    
     for b in blocos_brutos_totais:
         if b['tipo'] in ['ESTRUTURA', 'NOME_LEI']:
             blocos_filtrados.append(b)
@@ -150,7 +147,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             texto_caput = b['artigo'].get('nome', '') + " " + b['artigo'].get('resto', '')
             caput_tem_ano = any(ano in texto_caput for ano in anos_alvo)
             
-            # Regex dinâmica adaptada aos anos selecionados
             regex_novo = rf'\((Incluído|Acrescentado|Inserido).*?({regex_anos})\)'
             caput_novo_integral = caput_tem_ano and re.search(regex_novo, texto_caput, re.IGNORECASE)
             
@@ -189,10 +185,9 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             b['conteudo'] = sub_itens_alterados
             blocos_filtrados.append(b)
 
-    # 🟡 FASE 4: O DESTRUIDOR DE TÍTULOS FANTASMAS
+    # FASE 4: TÍTULOS FANTASMAS
     final_elementos = []
     estruturas_pendentes = [] 
-    
     for b in blocos_filtrados:
         if b['tipo'] in ['ESTRUTURA', 'NOME_LEI']:
             estruturas_pendentes.append(b) 
@@ -201,36 +196,38 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             estruturas_pendentes = [] 
             final_elementos.append(b)
 
-    # 🔵 FASE 5: MONTAGEM LATEX
+    # FASE 5: MONTAGEM LATEX LIMPA (Sem multicol)
     documento_latex = []
-    documento_latex.append(r"\documentclass[10pt,a4paper]{article}") 
+    # Usamos twocolumn na classe base, que é 100% suportado pelas caixas quebraveis
+    documento_latex.append(r"\documentclass[10pt,a4paper,twocolumn]{article}") 
     documento_latex.append(r"\usepackage[utf8]{inputenc}")
     documento_latex.append(r"\usepackage[T1]{fontenc}")
     documento_latex.append(r"\usepackage[brazilian]{babel}")
-    documento_latex.append(r"\usepackage{lmodern}") # ESSENCIAL PARA O SERVIDOR CLOUD
-    documento_latex.append(r"\usepackage[top=1.5cm,bottom=1.5cm,left=1.2cm,right=1.2cm]{geometry}")
+    documento_latex.append(r"\usepackage{lmodern}") 
+    documento_latex.append(r"\usepackage[top=1.6cm,bottom=1.8cm,left=1.2cm,right=1.2cm]{geometry}")
     documento_latex.append(r"\usepackage{enumitem}")
     documento_latex.append(r"\usepackage[most]{tcolorbox}")
     documento_latex.append(r"\usepackage{xcolor}")
     documento_latex.append(r"\usepackage[hidelinks]{hyperref}") 
-    documento_latex.append(r"\usepackage{multicol}")
-    documento_latex.append(r"\usepackage[protrusion=true,expansion=false]{microtype}") # BLINDAGEM CONTRA ESTOURO
+    documento_latex.append(r"\usepackage[protrusion=true,expansion=false]{microtype}") 
     
     documento_latex.append(r"\setlist{noitemsep, topsep=2pt, parsep=0pt, partopsep=0pt}")
-    
-    # Caixa ajustada com width=\linewidth para evitar margens vazadas
     documento_latex.append(r"\newtcolorbox{artigoBox}[1]{enhanced, width=\linewidth, breakable, colback=gray!4, colframe=gray!60, coltitle=black, fonttitle=\bfseries\normalsize, title=#1, attach title to upper=\par\vspace{2pt}, arc=1mm, boxrule=0.5pt, left=2mm, right=2mm, top=1.5mm, bottom=1.5mm, before=\par\vspace{0.1cm}, after=\par}")
     documento_latex.append(r"\definecolor{corAtualizacao}{rgb}{0.0, 0.35, 0.65}") 
     documento_latex.append(r"\newcommand{\marcadorNovo}{\textbf{\color{corAtualizacao}}[Lei Recente]~}")
     
     documento_latex.append(r"\begin{document}")
-    documento_latex.append(r"\begin{center}{\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\\[0.2cm]{\large Atualizações de " + " a ".join(anos_alvo) + r"}\\[0.6cm]\end{center}")
+    
+    # Capa / Cabeçalho mesclando as duas colunas
+    documento_latex.append(r"\twocolumn[")
+    documento_latex.append(r"  \begin{center}{\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\\[0.2cm]")
+    documento_latex.append(r"  {\large Atualizações de " + " a ".join(anos_alvo) + r"}\\[0.6cm]\end{center}")
+    documento_latex.append(r"]")
+    
     documento_latex.append(r"\renewcommand{\contentsname}{Índice de Leis e Artigos Alterados}")
     documento_latex.append(r"\tableofcontents\vspace{0.6cm}\hrule\vspace{0.4cm}")
-    documento_latex.append(r"\begin{multicols}{2}")
     
     em_lista_inciso = False; em_lista_alinea = False
-    
     def fechar_listas():
         nonlocal em_lista_alinea, em_lista_inciso
         if em_lista_alinea: documento_latex.append("        \\end{enumerate}"); em_lista_alinea = False
@@ -240,9 +237,17 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         if el['tipo'] == 'NOME_LEI':
             fechar_listas()
             texto_lei = limpar_texto_latex(el.get('texto', ''))
+            
+            # Quando inicia uma lei nova, vai para uma nova página limpa
+            documento_latex.append(r"\clearpage")
+            documento_latex.append(r"\twocolumn[")
+            documento_latex.append(f"  \\begin{{center}}\\vspace{{0.5cm}}\\noindent\\textbf{{\\LARGE {texto_lei}}}\\par\\vspace{{0.2cm}}\\hrule\\vspace{{0.4cm}}\\end{{center}}")
+            documento_latex.append(r"]")
+            
             documento_latex.append(r"\phantomsection")
-            documento_latex.append(f"\\addcontentsline{{toc}}{{section}}{{{texto_lei}}}")
-            documento_latex.append(f"\\end{{multicols}}\\vspace{{0.5cm}}\\noindent\\textbf{{\\Large {texto_lei}}}\\par\\vspace{{0.2cm}}\\hrule\\vspace{{0.4cm}}\\begin{{multicols}}{{2}}")
+            # Usa o nome simples para evitar bugar o sumário
+            nome_limpo = texto_lei.replace(r'\textsuperscript{o}', 'o')
+            documento_latex.append(f"\\addcontentsline{{toc}}{{section}}{{{nome_limpo}}}")
             
         elif el['tipo'] == 'ESTRUTURA':
             texto_est = limpar_texto_latex(el.get('texto', ''))
@@ -256,7 +261,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             resto_art = limpar_texto_latex(art.get('resto', ''))
             
             documento_latex.append(r"\phantomsection")
-            documento_latex.append(f"\\addcontentsline{{toc}}{{subsubsection}}{{{nome_art}}}")
             documento_latex.append(f"\\begin{{artigoBox}}{{{nome_art}}}")
             
             if resto_art:
@@ -293,13 +297,14 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             fechar_listas()
             documento_latex.append("\\end{artigoBox}")
             
-    documento_latex.append(r"\end{multicols}\end{document}")
+    documento_latex.append(r"\end{document}")
     
-    codigo_latex_bruto = "\n".join(documento_latex)
-    return verificador_pre_compilacao_latex(codigo_latex_bruto)
+    # Prevenção extra de espaços excessivos
+    codigo_latex = "\n".join(documento_latex)
+    codigo_latex = re.sub(r'\\begin\{artigoBox\}\{[^\}]*\}\s*\\end\{artigoBox\}', '', codigo_latex)
+    return codigo_latex
 
 def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None):
-    # Rotas seguras que detectam se o sistema é o Windows Local ou a Nuvem (Linux)
     if os.name != 'nt':
         diretorio_base = "/tmp"
     else:
@@ -320,17 +325,8 @@ def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None)
     if os.name == 'nt': comando.insert(3, "-screendialogs=no")
         
     try:
-        # PRIMEIRA PASSAGEM: Criação do Índice (.toc)
-        subprocess.run(
-            comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=90,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-        )
-        
-        # SEGUNDA PASSAGEM: Renderização e alinhamento do texto PDF real
-        compilacao = subprocess.run(
-            comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=90,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-        )
+        subprocess.run(comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=90, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        compilacao = subprocess.run(comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=90, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         
         if os.path.exists(arquivo_pdf):
             return "sucesso", arquivo_pdf
