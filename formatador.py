@@ -43,13 +43,21 @@ def raspar_portal_planalto(url):
 
 def higienizar_unicodes(texto):
     if not texto: return ""
+    
+    # FORÇA a normalização para NFKC, que aglutina letras com acentos separados
+    # Transformando, por exemplo, 'i' + '´' (U+0301) no 'í' genuíno (U+00ED)
+    texto = unicodedata.normalize('NFKC', texto)
+    
     substituicoes = {
         '\x1c': 'fi', '\x1d': 'fl', '\xa0': ' ', '\u200b': '', '\u200c': '', 
         '\u200d': '', '\ufeff': '', '\x0c': '\n', '–': '-', '—': '-', 
-        '“': '"', '”': '"', '‘': "'", '’': "'"
+        '“': '"', '”': '"', '‘': "'", '’': "'",
+        # Adicione uma proteção extra contra o acento fantasma se ele sobreviver à normalização:
+        '\u0301': '' 
     }
     for erro, correcao in substituicoes.items():
         texto = texto.replace(erro, correcao)
+        
     return re.sub(r'[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]', '', texto)
 
 def limpar_texto_latex(texto):
@@ -200,7 +208,8 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     documento_latex = []
     # Usamos twocolumn na classe base, que é 100% suportado pelas caixas quebraveis
     documento_latex.append(r"\documentclass[10pt,a4paper,twocolumn]{article}") 
-    documento_latex.append(r"\usepackage[utf8]{inputenc}")
+    # O pacote utf8x (Extended UTF-8) lida com caracteres Unicode não documentados
+    documento_latex.append(r"\usepackage[utf8x]{inputenc}")
     documento_latex.append(r"\usepackage[T1]{fontenc}")
     documento_latex.append(r"\usepackage[brazilian]{babel}")
     documento_latex.append(r"\usepackage{lmodern}") 
