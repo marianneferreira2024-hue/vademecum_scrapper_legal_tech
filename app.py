@@ -188,21 +188,32 @@ with col_direita:
                 use_container_width=True
             )
         
+        import streamlit.components.v1 as components
+        import base64
+
+        # 1. Converte os dados binários do PDF para string Base64 (sem quebras de linha)
         base64_pdf = base64.b64encode(dados_pdf).decode('utf-8')
         
-        # Nova abordagem com <embed> e fallback para <object> (Fura o bloqueio do Chrome/Edge)
-        pdf_display = f'''
-        <object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="600" style="border:1px solid #64748B; border-radius:8px;">
-            <embed src="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="600" />
-            <p>O seu navegador bloqueou a pré-visualização. Utilize o botão de descarregar acima.</p>
-        </object>
-        '''
-        st.markdown(pdf_display, unsafe_allow_html=True)
-    else:
-        st.info("ℹ️ Aguardando processamento. Escolha os diplomas desejados no painel esquerdo e ative a compilação.")
-
-    st.markdown("---")
-    st.subheader("📊 Trilha de Auditoria")
-    for log in st.session_state["logs"]:
-        badge = "🔴" if log["tipo"] == "Erro" else ("🟢" if log["tipo"] == "Sucesso" else "🔵")
-        st.markdown(f"<div style='background-color:#1b242e; border-left:4px solid #899ab3; padding:8px; margin-bottom:5px; font-family:monospace; font-size:0.85rem;'><b>[{log['timestamp']}] {badge} {log['tipo']}:</b> {log['texto']}</div>", unsafe_allow_html=True)
+        # 2. Constrói o HTML injetando JavaScript para converter Base64 em Blob em tempo de execução
+        html_preview = f"""
+        <iframe id="pdf-viewer" width="100%" height="580px" style="border:1px solid #64748B; border-radius:8px;"></iframe>
+        <script>
+            try {{
+                var base64Data = "{base64_pdf}";
+                var byteCharacters = atob(base64Data);
+                var byteNumbers = new Array(byteCharacters.length);
+                for (var i = 0; i < byteCharacters.length; i++) {{
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }}
+                var byteArray = new Uint8Array(byteNumbers);
+                var blob = new Blob([byteArray], {{type: 'application/pdf'}});
+                var blobUrl = URL.createObjectURL(blob);
+                document.getElementById('pdf-viewer').src = blobUrl;
+            }} catch(e) {{
+                document.write('<p style="font-family:sans-serif; color:#64748B; font-size:14px;">Não foi possível carregar a pré-visualização interativa. Por favor, utilize o botão de descarregar acima para abrir o Vade Mecum.</p>');
+            }}
+        </script>
+        """
+        
+        # 3. Renderiza o visualizador isolado num ambiente seguro (fura o bloqueio do Edge/Chrome)
+        components.html(html_preview, height=600)
