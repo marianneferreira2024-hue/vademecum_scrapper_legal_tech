@@ -101,6 +101,7 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         anos_destaque = ['2024', '2025', '2026']
     anos_alvo = [str(a) for a in anos_destaque]
     regex_anos = '|'.join(anos_alvo)
+    modo_completo = "VADE COMPLETO" in anos_alvo
     
     artigos_brutos_totais = []
     ordem_hierarquia = ['NOME_LEI', 'LIVRO', 'TÍTULO', 'CAPÍTULO', 'SEÇÃO', 'SUBSEÇÃO']
@@ -279,6 +280,10 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     documento_latex.append(r"\usepackage[hidelinks]{hyperref}") 
     documento_latex.append(r"\usepackage[protrusion=true,expansion=false]{microtype}") 
     
+    # SÓ CARREGA O MICROTYPE SE NÃO FOR O VADE COMPLETO GIGANTE
+    if not modo_completo:
+        documento_latex.append(r"\usepackage[protrusion=true,expansion=false]{microtype}") 
+        
     documento_latex.append(r"\setlist{noitemsep, topsep=2pt, parsep=0pt, partopsep=0pt}")
     documento_latex.append(r"\newtcolorbox{artigoBox}[1]{enhanced, width=\linewidth, breakable, colback=gray!4, colframe=gray!60, coltitle=black, fonttitle=\bfseries\normalsize, title=#1, attach title to upper=\par\vspace{2pt}, arc=1mm, boxrule=0.5pt, left=2mm, right=2mm, top=1.5mm, bottom=1.5mm, before=\par\vspace{0.1cm}, after=\par}")
     documento_latex.append(r"\definecolor{corAtualizacao}{rgb}{0.0, 0.35, 0.65}") 
