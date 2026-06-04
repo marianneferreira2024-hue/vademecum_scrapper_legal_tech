@@ -351,39 +351,51 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     # 3. O LOOP PRINCIPAL
     for b in artigos_filtrados:
         
-        # --- IMPRIME A HIERARQUIA (Títulos, Capítulos, etc.) ---
+        # --- IMPRIME A HIERARQUIA E ENVIA PARA O SUMÁRIO ---
         if 'hierarquia' in b:
             for nivel in niveis_hierarquia:
                 if nivel in b['hierarquia'] and b['hierarquia'][nivel] != last_printed[nivel]:
                     valor = b['hierarquia'][nivel]
                     if valor:
                         texto_nivel = limpar_texto_latex(valor)
+                        
+                        # 1. Imprime o Capítulo/Título no PDF
                         documento_latex.append(f"\\vspace{{0.4cm}}\\noindent\\begin{{center}}\\textbf{{{texto_nivel}}}\\end{{center}}\\vspace{{0.2cm}}")
+                        
+                        # 2. NOVO: Envia o Capítulo/Título para o Índice (Sumário)
+                        documento_latex.append(f"\\phantomsection\\addcontentsline{{toc}}{{section}}{{{texto_nivel}}}")
+                        
                     last_printed[nivel] = valor
 
         # --- IMPRIME O ARTIGO ---
         art = b['artigo']
-        
-        # Salvaguarda: Se o Art. 1º vier sem nome, forçamos a identificação
         nome_art = limpar_texto_latex(art.get('nome', ''))
         resto_art = limpar_texto_latex(art.get('resto', ''))
         
-        # Se por acaso o "nome" estiver vazio mas o "resto" tiver texto (erro comum no Art 1º do Planalto)
         if not nome_art and resto_art.lower().startswith("art"):
-            nome_art = "Art. 1º " # Força o nome
+            nome_art = "Art. 1º " 
             
         documento_latex.append(r"\phantomsection")
         
-        # LÓGICA DO BYPASS: Caixas para atualizações, Texto Limpo para Vade Completo
+        # LÓGICA DO BYPASS (Sem caixas no Vade Completo)
         if modo_completo:
             documento_latex.append(f"\\vspace{{0.3cm}}\\noindent\\textbf{{{nome_art}}} ")
+            
+            # 3. NOVO: Envia o nome do Artigo para o Índice manualmente (já que a caixa não está lá para o fazer)
+            if nome_art.strip():
+                documento_latex.append(f"\\addcontentsline{{toc}}{{subsection}}{{{nome_art}}}")
+                
         else:
             documento_latex.append(f"\\begin{{artigoBox}}{{{nome_art}}}")
+            # Se a caixa das atualizações também perdeu o sumário, forçamos aqui:
+            if nome_art.strip():
+                documento_latex.append(f"\\addcontentsline{{toc}}{{subsection}}{{{nome_art}}}")
             
         if resto_art:
             pref = r"\marcadorNovo " if any(a in resto_art for a in anos_alvo) and not modo_completo else ""
             documento_latex.append(f"\\noindent {pref}{resto_art}\\par\\vspace{{2pt}}")
             
+        # ... (O loop dos parágrafos e alíneas continua exatamente igual abaixo disto) ...
         # --- IMPRIME PARÁGRAFOS E ALÍNEAS ---
         for c in b['conteudo']:
             texto_item_bruto = c.get('resto','') + c.get('texto','')
