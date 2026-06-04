@@ -86,16 +86,16 @@ with col_esquerda:
 
     st.markdown("---")
     st.subheader("📅 Filtro de Destaques")
-    
-    # NOVAS COLUNAS PARA OS ANOS ALVO
+
     col_anos1, col_anos2 = st.columns([2, 1])
     
     with col_anos1:
-        anos_disponiveis = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027]
+        # CORREÇÃO 1: "VADE COMPLETO" com aspas e anos tratados como texto
+        anos_disponiveis = ["VADE COMPLETO", "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027"]
         anos_selecionados = st.multiselect(
             "Selecione os anos alvo na lista:",
             options=anos_disponiveis,
-            default=[2024, 2025, 2026]
+            default=["2024", "2025", "2026"]
         )
         
     with col_anos2:
@@ -108,10 +108,16 @@ with col_esquerda:
     anos_finais = list(anos_selecionados)
     if anos_extras_texto.strip():
         anos_extras = re.findall(r'\b\d{4}\b', anos_extras_texto)
-        anos_finais.extend([int(a) for a in anos_extras])
-        
-    # Remove duplicados e ordena
-    anos_finais = sorted(list(set(anos_finais)))
+        anos_finais.extend(anos_extras)
+
+    # Remove duplicados
+    anos_finais = sorted(list(set(anos_finais)), key=str)
+
+    # CORREÇÃO 2: Apenas ativamos a flag de aviso, a lista de leis já foi preenchida lá em cima!
+    if "VADE COMPLETO" in anos_finais:
+        st.warning("⚠️ 'VADE COMPLETO' selecionado: O documento será compilado na íntegra, ignorando os recortes por ano.")
+    else:
+        st.success(f"✂️ Modo Atualizações. Aplicando o bisturi para: {', '.join([str(a) for a in anos_finais])}")
 
     if st.button("🚀 Iniciar Coleta e Compilação Automática", use_container_width=True):
         if not anos_finais:
