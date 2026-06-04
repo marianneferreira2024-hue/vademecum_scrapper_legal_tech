@@ -396,7 +396,7 @@ def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None)
         f.write(codigo_tex)
         
     comando = [
-        "pdflatex", "-interaction=nonstopmode", "-halt-on-error",
+        "lualatex", "-interaction=nonstopmode", "-halt-on-error",
         f"-output-directory={diretorio_base}", arquivo_tex
     ]
     if os.name == 'nt': comando.insert(3, "-screendialogs=no")
