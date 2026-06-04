@@ -115,7 +115,7 @@ with col_esquerda:
 
     # CORREÇÃO 2: Apenas ativamos a flag de aviso, a lista de leis já foi preenchida lá em cima!
     if "VADE COMPLETO" in anos_finais:
-        st.warning("⚠️ 'VADE COMPLETO' selecionado: O documento será compilado na íntegra, ignorando os recortes por ano.")
+        st.warning("⚠️ 'VADE COMPLETO' selecionado: O documento será compilado na íntegra, ignorando os recortes por ano. Se deseja todo o conteúdo, mantenha 'VADE COMPLETO' selecionado e certifique-se de que as leis escolhidas estão corretas.")
     else:
         st.success(f"✂️ Modo Atualizações. Aplicando o bisturi para: {', '.join([str(a) for a in anos_finais])}")
 
