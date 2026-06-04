@@ -6,7 +6,7 @@ import formatador
 import re
 import time
 
-st.set_page_config(page_title="LAPEJURI - LegalTech", page_icon="⚖️", layout="wide")
+st.set_page_config(page_title="VADE ATUALIZADO LegalTech", page_icon="⚖️", layout="wide")
 # ... (MANTENHA O SEU CÓDIGO app.py IGUAL ATÉ À ZONA DO BOTÃO INICIAR) ...
 MAPA_LEIS = {
     "Código Penal (Decreto-Lei nº 2.848/40)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm",
@@ -41,7 +41,8 @@ def registar_log(texto, tipo):
     hora_atual = datetime.now().strftime("%H:%M:%S")
     st.session_state["logs"].insert(0, {"timestamp": hora_atual, "texto": texto, "tipo": tipo})
 
-st.markdown("<h1 style='text-align: center; color: #1E293B;'>⚖️ Inteligência Documental em Lote - LAPEJURI</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #1E293B;'>⚖️ Inteligência Documental em Lote - VADE ATUALIZADO</h1>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; color: #64748B; font-size: 16px;'>Desenvolvido e aprimorado por: Marianne Ramos.</p>", unsafe_allow_html=True)
 st.divider()
 
 col_esquerda, col_direita = st.columns([1, 1])
