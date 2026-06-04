@@ -277,9 +277,7 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     documento_latex.append(r"\usepackage{enumitem}")
     documento_latex.append(r"\usepackage[most]{tcolorbox}")
     documento_latex.append(r"\usepackage{xcolor}")
-    documento_latex.append(r"\usepackage[hidelinks]{hyperref}") 
-    documento_latex.append(r"\usepackage[protrusion=true,expansion=false]{microtype}") 
-    
+    documento_latex.append(r"\usepackage[hidelinks]{hyperref}")    
     # SÓ CARREGA O MICROTYPE SE NÃO FOR O VADE COMPLETO GIGANTE
     if not modo_completo:
         documento_latex.append(r"\usepackage[protrusion=true,expansion=false]{microtype}") 
