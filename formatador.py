@@ -39,11 +39,11 @@ def raspar_portal_planalto(url):
             
         soup = BeautifulSoup(resposta.text, 'html.parser')
         
-        # 1. DESTRUIR LIXO (Remove textos revogados, scripts e estilos)
+        # 1. DESTRUIR LIXO (Remove textos revogados)
         for tag in soup.find_all(['strike', 'del', 's', 'script', 'style']):
             tag.decompose()
             
-        # 2. PROTEGER BLOCOS (Em vez de separar tudo, isolamos apenas parágrafos e títulos)
+        # 2. PROTEGER BLOCOS
         tags_bloco = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'tr']
         for tag in soup.find_all(tags_bloco):
             tag.insert_before('\n')
@@ -52,32 +52,38 @@ def raspar_portal_planalto(url):
         for br in soup.find_all('br'):
             br.replace_with('\n')
             
-        # 3. EXTRAÇÃO CIRÚRGICA (Sem separador para não partir tags <b> e <span> a meio)
         if soup.body:
             texto_bruto = soup.body.get_text()
         else:
             texto_bruto = soup.get_text()
             
-        # 4. HIGIENIZAÇÃO DE VÍCIOS DO PLANALTO
-        # Garante que "Art." comece sempre numa linha nova (às vezes fica colado a um título)
-        texto_bruto = re.sub(r'(?<!\n)(Art\.\s*\d+)', r'\n\1', texto_bruto)
+        # 3. HIGIENIZAÇÃO CIRÚRGICA DE VÍCIOS DO PLANALTO
+        texto_bruto = texto_bruto.replace('\xa0', ' ')
         
-        # Corrige as letras "o" minúsculas usadas erradamente pelo Governo como símbolo ordinal (ex: Art. 2o vira Art. 2º)
-        texto_bruto = re.sub(r'(Art\.\s*\d+)[oO]\b', r'\1º', texto_bruto)
-        texto_bruto = re.sub(r'(§\s*\d+)[oO]\b', r'\1º', texto_bruto)
-            
+        # A. DESCOLA O ARTIGO 1º DOS SUBTÍTULOS
+        # Se o "Art." estiver colado a uma palavra anterior (ex: "Lei Art. 1º"), força uma quebra de linha
+        texto_bruto = re.sub(r'(?<!\n)\s*(Art\.\s*\d+)', r'\n\1', texto_bruto)
+        texto_bruto = re.sub(r'([a-zÀ-ÿ])(Art\.)', r'\1\n\2', texto_bruto, flags=re.IGNORECASE)
+        
+        # B. CORREÇÃO DE GRAUS (Somente para artigos de 1 a 9)
+        # Transforma letras "o" ou "O" em símbolo de grau, mas APENAS para dígitos únicos, protegendo o Art. 20, 30, etc.
+        texto_bruto = re.sub(r'(Art\.\s*[1-9])[oO]\b', r'\1º', texto_bruto)
+        texto_bruto = re.sub(r'(§\s*[1-9])[oO]\b', r'\1º', texto_bruto)
+        
+        # C. GARANTE O ESPAÇO APÓS O GRAU
+        # Se estiver colado (Ex: "Art. 1ºNão há crime"), introduz o espaço ("Art. 1º Não há crime")
+        texto_bruto = re.sub(r'(Art\.\s*\d+º)(?=[^\s-])', r'\1 ', texto_bruto)
+        
         linhas_texto = []
         for linha in texto_bruto.split('\n'):
             linha = linha.strip()
-            # Limpa espaços duplos
             linha = re.sub(r'[ \t\r\f\v]+', ' ', linha)
             
-            # Guarda apenas linhas úteis e estruturadas
             if linha and len(linha) > 2 and not linha.startswith("Mensagem de"):
                 linhas_texto.append(linha)
                     
         if not linhas_texto:
-            return "Erro: O scraper não conseguiu extrair blocos de texto ou o documento foi revogado."
+            return "Erro: O scraper não conseguiu extrair blocos de texto ou documento revogado."
             
         return "\n".join(linhas_texto)
     except Exception as e:
