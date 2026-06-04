@@ -190,7 +190,7 @@ with col_direita:
             st.download_button(
                 label="📥 Descarregar Vade Mecum Compilado (PDF)",
                 data=dados_pdf,
-                file_name="VadeMecum_LAPEJURI_Lote.pdf",
+                file_name="VadeMecum_ATUALIZADO_Lote.pdf",
                 mime="application/pdf",
                 use_container_width=True
             )
