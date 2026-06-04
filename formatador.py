@@ -302,13 +302,18 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     documento_latex.append(r"\newtcolorbox{artigoBox}[1]{enhanced, width=\linewidth, breakable, colback=gray!4, colframe=gray!60, coltitle=black, fonttitle=\bfseries\normalsize, title=#1, attach title to upper=\par\vspace{2pt}, arc=1mm, boxrule=0.5pt, left=2mm, right=2mm, top=1.5mm, bottom=1.5mm, before=\par\vspace{0.1cm}, after=\par}")
     documento_latex.append(r"\definecolor{corAtualizacao}{rgb}{0.0, 0.35, 0.65}") 
     documento_latex.append(r"\newcommand{\marcadorNovo}{\textbf{\color{corAtualizacao}}[Lei Recente]~}")
-    
     documento_latex.append(r"\begin{document}")
     
     documento_latex.append(r"\twocolumn[{")
+    # 1. Abrimos o center AQUI
     documento_latex.append(r"  \begin{center}{\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\par\vspace{0.2cm}")
-    documento_latex.append(r"  {\large Desenvolvido por: Marianne Ramos Ferreira}\par\vspace{0.6cm}\end{center}")
-    documento_latex.append(r"  {\large Atualizações: " + ", ".join(anos_alvo) + r"}\par\vspace{0.6cm}\end{center}")
+    
+    # 2. Mantemos o texto da autora (repare que REMOVI o \end{center} que estava no final desta linha)
+    documento_latex.append(r"  {\large Desenvolvido por: Marianne Ramos Ferreira}\par\vspace{0.2cm}")
+    
+    # 3. Colocamos as atualizações e fechamos o center APENAS UMA VEZ no final
+    # (Adicionei também uma proteção com 'str(a)' para evitar que anos em formato numérico quebrem o código)
+    documento_latex.append(r"  {\large Atualizações: " + ", ".join([str(a) for a in anos_alvo]) + r"}\par\vspace{0.6cm}\end{center}")
     documento_latex.append(r"}]")
     
     documento_latex.append(r"\renewcommand{\contentsname}{Índice de Leis e Artigos Alterados}")
