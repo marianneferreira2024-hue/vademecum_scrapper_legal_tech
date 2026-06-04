@@ -185,7 +185,22 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         if bloco_artigo_atual:
             artigos_brutos_totais.append(bloco_artigo_atual)
 
-    artigos_filtrados = []
+    artigos_filtrados = []    
+    # 1. ADICIONE ESTA LINHA PARA DETETAR A FLAG DO VADE COMPLETO
+    modo_completo = "VADE COMPLETO" in anos_alvo
+
+    for b in artigos_brutos_totais:
+        
+        # 2. SE FOR MODO COMPLETO, ADICIONA O ARTIGO INTEIRO À LISTA FINAL E SALTA O RESTO DA ANÁLISE!
+        if modo_completo:
+            artigos_filtrados.append(b)
+            continue
+            
+        texto_caput = b['artigo'].get('nome', '') + " " + b['artigo'].get('resto', '')
+        caput_tem_ano = any(ano in texto_caput for ano in anos_alvo)
+        
+        regex_novo = rf'\((Incluído|Acrescentado|Inserido|Redação dada).*?({regex_anos})\)'
+        # ... resto do código existente do bisturi ...
     for b in artigos_brutos_totais:
         texto_caput = b['artigo'].get('nome', '') + " " + b['artigo'].get('resto', '')
         caput_tem_ano = any(ano in texto_caput for ano in anos_alvo)
