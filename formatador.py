@@ -306,25 +306,32 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     last_printed = {k: None for k in ordem_hierarquia}
 
     # ADICIONE ESTA LINHA (se ainda não tiver) antes do loop dos artigos:
+    # ... o seu código anterior que faz o filtro do bisturi ...
+
+    # 1. DETETA SE É O VADE COMPLETO
     modo_completo = "VADE COMPLETO" in anos_alvo
 
-    art = b['artigo']
-    nome_art = limpar_texto_latex(art.get('nome', ''))
-    resto_art = limpar_texto_latex(art.get('resto', ''))
+    # 2. O LOOP PRINCIPAL (Garante que imprime TODOS os artigos e não só o último)
+    for b in artigos_filtrados:
         
-    documento_latex.append(r"\phantomsection")
+        art = b['artigo']
+        nome_art = limpar_texto_latex(art.get('nome', ''))
+        resto_art = limpar_texto_latex(art.get('resto', ''))
+        
+        documento_latex.append(r"\phantomsection")
         
         # LÓGICA DO BYPASS: Caixas para atualizações, Texto Limpo para Vade Completo
-    if modo_completo:
+        if modo_completo:
             documento_latex.append(f"\\vspace{{0.3cm}}\\noindent\\textbf{{{nome_art}}} ")
-    else:
+        else:
             documento_latex.append(f"\\begin{{artigoBox}}{{{nome_art}}}")
             
-    if resto_art:
+        if resto_art:
             pref = r"\marcadorNovo " if any(a in resto_art for a in anos_alvo) and not modo_completo else ""
             documento_latex.append(f"\\noindent {pref}{resto_art}\\par\\vspace{{2pt}}")
             
-    for c in b['conteudo']:
+        # LOOP QUE IMPRIME PARÁGRAFOS E ALÍNEAS DE CADA ARTIGO
+        for c in b['conteudo']:
             texto_item_bruto = c.get('resto','') + c.get('texto','')
             pref_c = r"\marcadorNovo " if any(a in texto_item_bruto for a in anos_alvo) and not modo_completo else ""
             
@@ -350,18 +357,19 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 if txt.startswith("Pena"): txt = re.sub(r'^Pena\s*[-–\.]?\s*(.*)', r'\\textbf{Pena -} \1', txt)
                 documento_latex.append(f"\n\\noindent {pref_c}{txt}\\par\\vspace{{2pt}}")
                 
-    fechar_listas()
+        fechar_listas()
         
-        # FECHA A CAIXA OU DÁ ESPAÇAMENTO DE TEXTO
-    if not modo_completo:
+        # FECHA A CAIXA OU DÁ ESPAÇAMENTO DE TEXTO (Ainda dentro do loop for!)
+        if not modo_completo:
             documento_latex.append("\\end{artigoBox}")
-    else:
-        documento_latex.append("\\par\\vspace{0.2cm}") 
+        else:
+            documento_latex.append("\\par\\vspace{0.2cm}") 
             
+    # 3. FECHA O DOCUMENTO (Fora do loop!)
     documento_latex.append(r"\end{document}")
     
-    codigo_latex = "\n".join(documento_latex)
-    return codigo_latex
+    return "\n".join(documento_latex)
+
 def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None):
     if os.name != 'nt':
         diretorio_base = "/tmp"
