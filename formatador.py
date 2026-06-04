@@ -104,6 +104,11 @@ def higienizar_unicodes(texto):
     return texto
 
 def limpar_texto_latex(texto):
+    import re
+
+# Coloque isto na zona onde você limpa o texto bruto da lei:
+    texto = re.sub(r'(Art\.\s*\d+)[oO0]\b', r'\1º', texto)
+    texto = re.sub(r'(§\s*\d+)[oO0]\b', r'\1º', texto)
     if not texto: return ""
     texto = texto.replace('§', r'\S{}~').replace('Ÿ', r'\S{}~')
     texto = texto.replace('_', r'\_').replace('&', r'\&').replace('$', r'\$').replace('%', r'\%').replace('#', r'\#')
