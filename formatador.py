@@ -9,8 +9,13 @@ from bs4 import BeautifulSoup
 
 def raspar_portal_planalto(url):
     try:
+        import requests
+        from bs4 import BeautifulSoup
+        import re
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+
         url_limpa = str(url).strip().replace('"', '').replace("'", "").replace('`', '')
-        url_limpa = url_limpa.replace('\n', '').replace('\r', '').replace('\t', '')
         url_limpa = "".join(url_limpa.split())
         
         if not url_limpa.lower().startswith("http"):
@@ -22,10 +27,8 @@ def raspar_portal_planalto(url):
         session.mount('https://', HTTPAdapter(max_retries=retries))
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Connection": "keep-alive"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         }
         
         resposta = session.get(url_limpa, headers=headers, timeout=30)
@@ -36,32 +39,45 @@ def raspar_portal_planalto(url):
             
         soup = BeautifulSoup(resposta.text, 'html.parser')
         
-        # 1. DESTRUIR LIXO (Remove textos riscados, scripts e estilos ocultos)
+        # 1. DESTRUIR LIXO (Remove textos revogados, scripts e estilos)
         for tag in soup.find_all(['strike', 'del', 's', 'script', 'style']):
             tag.decompose()
             
-        # 2. Transforma quebras de linha web em quebras reais
+        # 2. PROTEGER BLOCOS (Em vez de separar tudo, isolamos apenas parágrafos e títulos)
+        tags_bloco = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'tr']
+        for tag in soup.find_all(tags_bloco):
+            tag.insert_before('\n')
+            tag.insert_after('\n')
+            
         for br in soup.find_all('br'):
             br.replace_with('\n')
             
-        # 3. EXTRAÇÃO UNIVERSAL (Não depende mais de <p> ou <div>)
+        # 3. EXTRAÇÃO CIRÚRGICA (Sem separador para não partir tags <b> e <span> a meio)
         if soup.body:
-            texto_bruto = soup.body.get_text(separator='\n')
+            texto_bruto = soup.body.get_text()
         else:
-            texto_bruto = soup.get_text(separator='\n')
+            texto_bruto = soup.get_text()
+            
+        # 4. HIGIENIZAÇÃO DE VÍCIOS DO PLANALTO
+        # Garante que "Art." comece sempre numa linha nova (às vezes fica colado a um título)
+        texto_bruto = re.sub(r'(?<!\n)(Art\.\s*\d+)', r'\n\1', texto_bruto)
+        
+        # Corrige as letras "o" minúsculas usadas erradamente pelo Governo como símbolo ordinal (ex: Art. 2o vira Art. 2º)
+        texto_bruto = re.sub(r'(Art\.\s*\d+)[oO]\b', r'\1º', texto_bruto)
+        texto_bruto = re.sub(r'(§\s*\d+)[oO]\b', r'\1º', texto_bruto)
             
         linhas_texto = []
         for linha in texto_bruto.split('\n'):
             linha = linha.strip()
-            # Limpa espaços duplos ou excessivos no meio da frase
+            # Limpa espaços duplos
             linha = re.sub(r'[ \t\r\f\v]+', ' ', linha)
             
-            # Só guarda linhas que realmente têm conteúdo jurídico
+            # Guarda apenas linhas úteis e estruturadas
             if linha and len(linha) > 2 and not linha.startswith("Mensagem de"):
                 linhas_texto.append(linha)
                     
         if not linhas_texto:
-            return "Erro: O scraper não conseguiu extrair blocos de texto ou o documento foi todo revogado."
+            return "Erro: O scraper não conseguiu extrair blocos de texto ou o documento foi revogado."
             
         return "\n".join(linhas_texto)
     except Exception as e:
@@ -291,6 +307,7 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     
     documento_latex.append(r"\twocolumn[{")
     documento_latex.append(r"  \begin{center}{\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\par\vspace{0.2cm}")
+    documento_latex.append(r"  {\large Desenvolvido por: Marianne Ramos Ferreira}\par\vspace{0.6cm}\end{center}")
     documento_latex.append(r"  {\large Atualizações: " + ", ".join(anos_alvo) + r"}\par\vspace{0.6cm}\end{center}")
     documento_latex.append(r"}]")
     
