@@ -362,7 +362,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     
     codigo_latex = "\n".join(documento_latex)
     return codigo_latex
-
 def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None):
     if os.name != 'nt':
         diretorio_base = "/tmp"
@@ -372,6 +371,17 @@ def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None)
     arquivo_tex = os.path.join(diretorio_base, f"{nome_base}.tex")
     arquivo_pdf = os.path.join(diretorio_base, f"{nome_base}.pdf")
     
+    # 1. NOVO: ROTINA DE LIMPEZA DO LIXO ANTERIOR (Previne o Runaway argument)
+    extensoes_lixo = ['.aux', '.toc', '.out', '.log']
+    for ext in extensoes_lixo:
+        arquivo_temp = os.path.join(diretorio_base, f"{nome_base}{ext}")
+        if os.path.exists(arquivo_temp):
+            try:
+                os.remove(arquivo_temp)
+            except:
+                pass
+                
+    # 2. Gera o novo código tex
     codigo_tex = formatar_codigo_penal_para_latex(lista_leis, anos_destaque)
     
     with open(arquivo_tex, "w", encoding="utf-8") as f:
@@ -385,6 +395,8 @@ def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None)
         
     try:
         import subprocess
+        # Primeira passagem...
+        # (MANTENHA O RESTO DO SEU CÓDIGO DAQUI PARA BAIXO IGUAL AO QUE JÁ TINHA)
         # Primeira passagem
         subprocess.run(
             comando, 
