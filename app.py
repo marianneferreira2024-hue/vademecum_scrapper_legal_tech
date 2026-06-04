@@ -14,7 +14,7 @@ MAPA_LEIS = {
     "Lei de Crimes Hediondos (Lei nº 8.072/90)": "https://www.planalto.gov.br/ccivil_03/leis/l8072.htm",
     "Lei de Introdução às Normas do Direito Brasileiro (LINDB)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del4657compilado.htm",
     "Código Civil (Lei nº 10.406/2002)": "https://www.planalto.gov.br/ccivil_03/leis/2002/l10406.htm",
-    "Código de Processo Civil (Lei nº 13.105/2015)": "https://www4.planalto.gov.br/legislacao/portal-legis/legislacao-1/codigos-1#wrapper",
+    "Código de Processo Civil (Lei nº 13.105/2015)": "https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2015/lei/l13105.htm",
     "Código Tributário Nacional (Lei nº 5.172/1967)": "https://www.planalto.gov.br/ccivil_03/leis/l5172.htm",
     "Consolidação das Leis do Trabalho (Decreto-Lei nº 5.430/1943)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm",
     "Código de Defesa do Consumidor (Lei nº 8.078/1990)": "https://www.planalto.gov.br/ccivil_03/leis/l8078.htm",
