@@ -381,17 +381,39 @@ def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None)
     if os.name == 'nt': comando.insert(3, "-screendialogs=no")
         
     try:
-        subprocess.run(comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=600, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-        compilacao = subprocess.run(comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=600, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        import subprocess
+        # Primeira passagem
+        subprocess.run(
+            comando, 
+            stdout=subprocess.DEVNULL, # Ignora o log gigante que trava o Python
+            stderr=subprocess.PIPE, 
+            timeout=900, # 15 minutos
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+        
+        # Segunda passagem (para o Índice)
+        compilacao = subprocess.run(
+            comando, 
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.PIPE, 
+            timeout=900, 
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
         
         if os.path.exists(arquivo_pdf):
-            return "sucesso", arquivo_pdf
+            # Verifica se o PDF não está vazio (corrompido com 0 bytes)
+            if os.path.getsize(arquivo_pdf) > 1000: 
+                return "sucesso", arquivo_pdf
             
         arquivo_log = os.path.join(diretorio_base, f"{nome_base}.log")
         detalhe_erro = ""
         if os.path.exists(arquivo_log):
             with open(arquivo_log, "r", encoding="utf-8", errors="ignore") as l:
-                detalhe_erro = "\n".join(l.readlines()[-30:])
-        return "erro", f"Log LaTeX:\n{detalhe_erro}\n\nTerminal:\n{compilacao.stdout}"
+                linhas = l.readlines()
+                # Pega as últimas 50 linhas para tentarmos ver o erro real
+                detalhe_erro = "\n".join(linhas[-50:]) 
+                
+        erro_stderr = compilacao.stderr.decode('utf-8', errors='ignore') if compilacao.stderr else ""
+        return "erro", f"Log LaTeX:\n{detalhe_erro}\n\nErro Sistema:\n{erro_stderr}"
     except Exception as e:
         return "erro", f"Falha de execução: {str(e)}"
