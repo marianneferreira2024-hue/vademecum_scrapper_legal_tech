@@ -311,13 +311,34 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     # 1. DETETA SE É O VADE COMPLETO
     modo_completo = "VADE COMPLETO" in anos_alvo
 
-    # 2. O LOOP PRINCIPAL (Garante que imprime TODOS os artigos e não só o último)
+    # 2. DICIONÁRIO DE HIERARQUIA (Para não perdermos os Livros, Títulos e Capítulos)
+    niveis_hierarquia = ['PARTE', 'LIVRO', 'TITULO', 'CAPITULO', 'SECAO', 'SUBSECAO']
+    last_printed = {k: None for k in niveis_hierarquia}
+
+    # 3. O LOOP PRINCIPAL
     for b in artigos_filtrados:
         
+        # --- IMPRIME A HIERARQUIA (Títulos, Capítulos, etc.) ---
+        if 'hierarquia' in b:
+            for nivel in niveis_hierarquia:
+                if nivel in b['hierarquia'] and b['hierarquia'][nivel] != last_printed[nivel]:
+                    valor = b['hierarquia'][nivel]
+                    if valor:
+                        texto_nivel = limpar_texto_latex(valor)
+                        documento_latex.append(f"\\vspace{{0.4cm}}\\noindent\\begin{{center}}\\textbf{{{texto_nivel}}}\\end{{center}}\\vspace{{0.2cm}}")
+                    last_printed[nivel] = valor
+
+        # --- IMPRIME O ARTIGO ---
         art = b['artigo']
+        
+        # Salvaguarda: Se o Art. 1º vier sem nome, forçamos a identificação
         nome_art = limpar_texto_latex(art.get('nome', ''))
         resto_art = limpar_texto_latex(art.get('resto', ''))
         
+        # Se por acaso o "nome" estiver vazio mas o "resto" tiver texto (erro comum no Art 1º do Planalto)
+        if not nome_art and resto_art.lower().startswith("art"):
+            nome_art = "Art. 1º " # Força o nome
+            
         documento_latex.append(r"\phantomsection")
         
         # LÓGICA DO BYPASS: Caixas para atualizações, Texto Limpo para Vade Completo
@@ -330,7 +351,7 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             pref = r"\marcadorNovo " if any(a in resto_art for a in anos_alvo) and not modo_completo else ""
             documento_latex.append(f"\\noindent {pref}{resto_art}\\par\\vspace{{2pt}}")
             
-        # LOOP QUE IMPRIME PARÁGRAFOS E ALÍNEAS DE CADA ARTIGO
+        # --- IMPRIME PARÁGRAFOS E ALÍNEAS ---
         for c in b['conteudo']:
             texto_item_bruto = c.get('resto','') + c.get('texto','')
             pref_c = r"\marcadorNovo " if any(a in texto_item_bruto for a in anos_alvo) and not modo_completo else ""
@@ -359,13 +380,13 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 
         fechar_listas()
         
-        # FECHA A CAIXA OU DÁ ESPAÇAMENTO DE TEXTO (Ainda dentro do loop for!)
+        # FECHA A CAIXA OU DÁ ESPAÇAMENTO DE TEXTO
         if not modo_completo:
             documento_latex.append("\\end{artigoBox}")
         else:
-            documento_latex.append("\\par\\vspace{0.2cm}") 
+            documento_latex.append("\\par") 
             
-    # 3. FECHA O DOCUMENTO (Fora do loop!)
+    # FECHA O DOCUMENTO FINAL
     documento_latex.append(r"\end{document}")
     
     return "\n".join(documento_latex)
