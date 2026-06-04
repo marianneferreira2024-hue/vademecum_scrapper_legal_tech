@@ -59,19 +59,24 @@ def raspar_portal_planalto(url):
             
         # 3. HIGIENIZAÇÃO CIRÚRGICA DE VÍCIOS DO PLANALTO
         texto_bruto = texto_bruto.replace('\xa0', ' ')
+        # (Coloque isto logo a seguir a: texto_bruto = texto_bruto.replace('\xa0', ' '))
         
-        # A. DESCOLA O ARTIGO 1º DOS SUBTÍTULOS
-        # Se o "Art." estiver colado a uma palavra anterior (ex: "Lei Art. 1º"), força uma quebra de linha
-        texto_bruto = re.sub(r'(?<!\n)\s*(Art\.\s*\d+)', r'\n\1', texto_bruto)
-        texto_bruto = re.sub(r'([a-zÀ-ÿ])(Art\.)', r'\1\n\2', texto_bruto, flags=re.IGNORECASE)
+        # OBRIGA O ARTIGO 1º A IR PARA UMA NOVA LINHA, CUSTE O QUE CUSTAR:
+        texto_bruto = re.sub(r'(?<!\n)(Art\.\s*1[º°o]?\s*-?)', r'\n\1', texto_bruto)
+        
+        # --- FORÇA BRUTA UNIVERSAL (Funciona em QUALQUER lei) ---
+        # 1. Quebra a linha após o preâmbulo típico de promulgação de qualquer lei brasileira:
+        texto_bruto = re.sub(r'(?i)(seguinte [Ll]ei:?|seguinte [Cc]ódigo:?|decreta:?|resolve:?|promulga:?|aprova:?)\s*(Art\.)', r'\1\n\2', texto_bruto)
+        
+        # 2. Descola QUALQUER Artigo que esteja acidentalmente colado a um Título/Capítulo ou palavra anterior
+        # (Se houver uma letra ou pontuação antes do "Art.", obriga a ir para a linha de baixo)
+        texto_bruto = re.sub(r'([a-zA-ZÀ-ÿ:;.])\s*(Art\.\s*\d+)', r'\1\n\2', texto_bruto)
         
         # B. CORREÇÃO DE GRAUS (Somente para artigos de 1 a 9)
-        # Transforma letras "o" ou "O" em símbolo de grau, mas APENAS para dígitos únicos, protegendo o Art. 20, 30, etc.
         texto_bruto = re.sub(r'(Art\.\s*[1-9])[oO]\b', r'\1º', texto_bruto)
         texto_bruto = re.sub(r'(§\s*[1-9])[oO]\b', r'\1º', texto_bruto)
         
-        # C. GARANTE O ESPAÇO APÓS O GRAU
-        # Se estiver colado (Ex: "Art. 1ºNão há crime"), introduz o espaço ("Art. 1º Não há crime")
+        # C. GARANTE O ESPAÇO APÓS O GRAU (Ex: "Art. 1ºToda pessoa" -> "Art. 1º Toda pessoa")
         texto_bruto = re.sub(r'(Art\.\s*\d+º)(?=[^\s-])', r'\1 ', texto_bruto)
         
         linhas_texto = []
