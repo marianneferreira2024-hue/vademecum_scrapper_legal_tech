@@ -302,54 +302,28 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
 
     last_printed = {k: None for k in ordem_hierarquia}
 
-    for b in artigos_filtrados:
-        h = b['hierarquia']
-        
-        if h['NOME_LEI'] != last_printed['NOME_LEI']:
-            fechar_listas()
-            texto_lei = limpar_texto_latex(h['NOME_LEI'])
-            documento_latex.append(r"\clearpage")
-            documento_latex.append(r"\twocolumn[{")
-            documento_latex.append(f"  \\begin{{center}}\\vspace{{0.5cm}}\\noindent\\textbf{{\\LARGE {texto_lei}}}\\par\\vspace{{0.2cm}}\\hrule\\vspace{{0.4cm}}\\end{{center}}")
-            documento_latex.append(r"}]")
-            documento_latex.append(r"\phantomsection")
-            nome_limpo = texto_lei.replace(r'\textsuperscript{o}', 'o')
-            documento_latex.append(f"\\addcontentsline{{toc}}{{section}}{{{nome_limpo}}}")
-            last_printed['NOME_LEI'] = h['NOME_LEI']
-            
-            for k in ordem_hierarquia[1:]:
-                last_printed[k] = None
-                
-        for nivel in ['LIVRO', 'TÍTULO', 'CAPÍTULO', 'SEÇÃO', 'SUBSEÇÃO']:
-            if h[nivel] != last_printed[nivel]:
-                if h[nivel]: 
-                    texto_est = limpar_texto_latex(h[nivel])
-                    documento_latex.append(r"\phantomsection")
-                    if nivel in ['LIVRO', 'TÍTULO']:
-                        documento_latex.append(f"\\addcontentsline{{toc}}{{subsection}}{{{texto_est}}}")
-                    else:
-                        documento_latex.append(f"\\addcontentsline{{toc}}{{subsubsection}}{{{texto_est}}}")
-                    documento_latex.append(f"\\vspace{{0.3cm}}\\noindent\\textbf{{\\large {texto_est}}}\\par\\vspace{{0.1cm}}")
-                
-                last_printed[nivel] = h[nivel]
-                idx = ordem_hierarquia.index(nivel)
-                for k in ordem_hierarquia[idx+1:]:
-                    last_printed[k] = None
+    # ADICIONE ESTA LINHA (se ainda não tiver) antes do loop dos artigos:
+    modo_completo = "VADE COMPLETO" in anos_alvo
 
-        art = b['artigo']
-        nome_art = limpar_texto_latex(art.get('nome', ''))
-        resto_art = limpar_texto_latex(art.get('resto', ''))
+    art = b['artigo']
+    nome_art = limpar_texto_latex(art.get('nome', ''))
+    resto_art = limpar_texto_latex(art.get('resto', ''))
         
-        documento_latex.append(r"\phantomsection")
-        documento_latex.append(f"\\begin{{artigoBox}}{{{nome_art}}}")
+    documento_latex.append(r"\phantomsection")
         
-        if resto_art:
-            pref = r"\marcadorNovo " if any(a in resto_art for a in anos_alvo) else ""
+        # LÓGICA DO BYPASS: Caixas para atualizações, Texto Limpo para Vade Completo
+    if modo_completo:
+            documento_latex.append(f"\\vspace{{0.3cm}}\\noindent\\textbf{{{nome_art}}} ")
+    else:
+            documento_latex.append(f"\\begin{{artigoBox}}{{{nome_art}}}")
+            
+    if resto_art:
+            pref = r"\marcadorNovo " if any(a in resto_art for a in anos_alvo) and not modo_completo else ""
             documento_latex.append(f"\\noindent {pref}{resto_art}\\par\\vspace{{2pt}}")
             
-        for c in b['conteudo']:
+    for c in b['conteudo']:
             texto_item_bruto = c.get('resto','') + c.get('texto','')
-            pref_c = r"\marcadorNovo " if any(a in texto_item_bruto for a in anos_alvo) else ""
+            pref_c = r"\marcadorNovo " if any(a in texto_item_bruto for a in anos_alvo) and not modo_completo else ""
             
             if c['tipo'] == 'PARAGRAFO':
                 fechar_listas()
@@ -373,8 +347,13 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 if txt.startswith("Pena"): txt = re.sub(r'^Pena\s*[-–\.]?\s*(.*)', r'\\textbf{Pena -} \1', txt)
                 documento_latex.append(f"\n\\noindent {pref_c}{txt}\\par\\vspace{{2pt}}")
                 
-        fechar_listas()
-        documento_latex.append("\\end{artigoBox}")
+    fechar_listas()
+        
+        # FECHA A CAIXA OU DÁ ESPAÇAMENTO DE TEXTO
+    if not modo_completo:
+            documento_latex.append("\\end{artigoBox}")
+    else:
+        documento_latex.append("\\par\\vspace{0.2cm}") 
             
     documento_latex.append(r"\end{document}")
     
@@ -396,7 +375,7 @@ def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None)
         f.write(codigo_tex)
         
     comando = [
-        "lualatex", "-interaction=nonstopmode", "-halt-on-error",
+        "pdflatex", "-interaction=nonstopmode", "-halt-on-error",
         f"-output-directory={diretorio_base}", arquivo_tex
     ]
     if os.name == 'nt': comando.insert(3, "-screendialogs=no")
