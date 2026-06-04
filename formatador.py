@@ -36,22 +36,29 @@ def raspar_portal_planalto(url):
             
         soup = BeautifulSoup(resposta.text, 'html.parser')
         
-        for tag in soup.find_all(['strike', 'del', 's']):
+        # 1. DESTRUIR LIXO (Remove textos riscados, scripts e estilos ocultos)
+        for tag in soup.find_all(['strike', 'del', 's', 'script', 'style']):
             tag.decompose()
             
+        # 2. Transforma quebras de linha web em quebras reais
         for br in soup.find_all('br'):
             br.replace_with('\n')
             
-        paragrafos = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4'])
-        linhas_texto = []
-        for p in paragrafos:
-            texto = p.get_text(separator=' ', strip=True)
-            texto = re.sub(r'[ \t\r\f\v]+', ' ', texto) 
+        # 3. EXTRAÇÃO UNIVERSAL (Não depende mais de <p> ou <div>)
+        if soup.body:
+            texto_bruto = soup.body.get_text(separator='\n')
+        else:
+            texto_bruto = soup.get_text(separator='\n')
             
-            for linha in texto.split('\n'):
-                linha = linha.strip()
-                if linha and len(linha) > 2 and not linha.startswith("Mensagem de"):
-                    linhas_texto.append(linha)
+        linhas_texto = []
+        for linha in texto_bruto.split('\n'):
+            linha = linha.strip()
+            # Limpa espaços duplos ou excessivos no meio da frase
+            linha = re.sub(r'[ \t\r\f\v]+', ' ', linha)
+            
+            # Só guarda linhas que realmente têm conteúdo jurídico
+            if linha and len(linha) > 2 and not linha.startswith("Mensagem de"):
+                linhas_texto.append(linha)
                     
         if not linhas_texto:
             return "Erro: O scraper não conseguiu extrair blocos de texto ou o documento foi todo revogado."
@@ -59,7 +66,6 @@ def raspar_portal_planalto(url):
         return "\n".join(linhas_texto)
     except Exception as e:
         return f"Erro de conexão: {str(e)}"
-
 def higienizar_unicodes(texto):
     if not texto: return ""
     texto = unicodedata.normalize('NFKC', texto)
@@ -396,8 +402,8 @@ def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None)
     if os.name == 'nt': comando.insert(3, "-screendialogs=no")
         
     try:
-        subprocess.run(comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=90, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-        compilacao = subprocess.run(comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=90, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        subprocess.run(comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=600, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        compilacao = subprocess.run(comando, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=600, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         
         if os.path.exists(arquivo_pdf):
             return "sucesso", arquivo_pdf
