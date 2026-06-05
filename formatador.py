@@ -115,35 +115,35 @@ def higienizar_unicodes(texto):
     return texto
 
 def limpar_texto_latex(texto):
-    import re
-def limpar_texto_latex(texto):
     if not texto: return ""
     texto = str(texto)
     
-    # 1. Garante o escape de caracteres especiais do LaTeX primeiro (se já não estiverem)
-    # Certifique-se de que o cifrão de texto comum vire \$ para não quebrar o modo matemático
+    # 1. Escapa os caracteres de código e links da web antes do bloco matemático
+    texto = texto.replace('_', r'\_')
+    texto = texto.replace('&', r'\&')
+    
+    # 2. Garante o escape de cifrões originais do texto
     if '\\$' not in texto:
         texto = texto.replace('$', r'\$')
-    
-    # ... (as outras limpezas de texto que você já possui) ...
+        
+    # ... (suas substituições anteriores de º, ª, §) ...
     texto = texto.replace('º', r'\textsuperscript{o}')
     texto = texto.replace('ª', r'\textsuperscript{a}')
     texto = texto.replace('§', r'\S ')
 
-    # 💉 BLOCO MATEMÁTICO CORRIGIDO (Sem escapar o modo matemático)
+    # 💉 BLOCO MATEMÁTICO (Mantido intacto)
     texto = texto.replace('≤', r'$\leq$ ')
     texto = texto.replace('≥', r'$\geq$ ')
     texto = texto.replace('×', r'$\times$ ')
     texto = texto.replace('÷', r'$\div$ ')
     texto = texto.replace('±', r'$\pm$ ')
-    texto = texto.replace('°', r'$^\circ$ ') # Corrigido: usando $ puro para abrir/fechar matemática
+    texto = texto.replace('°', r'$^\circ$ ') 
     texto = texto.replace('µ', r'$\mu$ ')    
     texto = texto.replace('α', r'$\alpha$ ') 
     texto = texto.replace('β', r'$\beta$ ')  
     
     return texto
 
-import re
 
 def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     if anos_destaque is None:
