@@ -116,7 +116,25 @@ def higienizar_unicodes(texto):
 
 def limpar_texto_latex(texto):
     import re
+def limpar_texto_latex(texto):
+    if not texto: return ""
+    texto = str(texto)
+    
+    # ... (o seu código que já lá está para limpar \ e % etc) ...
+    texto = texto.replace('º', r'\textsuperscript{o}')
+    texto = texto.replace('ª', r'\textsuperscript{a}')
+    texto = texto.replace('§', r'\S ')
 
+    # 💉 NOVO: VACINA ANTI-SÍMBOLOS MATEMÁTICOS E UNICODE
+    texto = texto.replace('≤', r'$\leq$ ')
+    texto = texto.replace('≥', r'$\geq$ ')
+    texto = texto.replace('×', r'$\times$ ')
+    texto = texto.replace('÷', r'$\div$ ')
+    texto = texto.replace('±', r'$\pm$ ')
+    texto = texto.replace('°', r'$^\circ$ ') # Símbolo de temperatura/grau geométrico (diferente de º)
+    texto = texto.replace('µ', r'$\mu$ ')    # Micro (muito comum em leis de trânsito - bafômetro)
+    texto = texto.replace('α', r'$\alpha$ ') # Alfa
+    texto = texto.replace('β', r'$\beta$ ')  # Beta
 # Coloque isto na zona onde você limpa o texto bruto da lei:
     texto = re.sub(r'(Art\.\s*\d+)[oO0]\b', r'\1º', texto)
     texto = re.sub(r'(§\s*\d+)[oO0]\b', r'\1º', texto)
