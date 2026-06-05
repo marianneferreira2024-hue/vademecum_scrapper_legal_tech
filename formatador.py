@@ -128,6 +128,8 @@ def limpar_texto_latex(texto):
     texto = re.sub(r'(\((?:Redação dada|Incluído|Vide|Revogado|Acrescentado).*?\))', r'\\textit{\1}', texto)
     return texto
 
+import re
+
 def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     if anos_destaque is None:
         anos_destaque = ['2024', '2025', '2026']
@@ -136,7 +138,9 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     modo_completo = "VADE COMPLETO" in anos_alvo
     
     artigos_brutos_totais = []
-    ordem_hierarquia = ['NOME_LEI', 'LIVRO', 'TÍTULO', 'CAPÍTULO', 'SEÇÃO', 'SUBSEÇÃO']
+    
+    # 1. ADICIONADO O NOME DA LEI À HIERARQUIA PRINCIPAL
+    ordem_hierarquia = ['NOME_LEI', 'PARTE', 'LIVRO', 'TÍTULO', 'TITULO', 'CAPÍTULO', 'CAPITULO', 'SEÇÃO', 'SECAO', 'SUBSEÇÃO', 'SUBSECAO']
 
     for nome_lei, texto_bruto in lista_leis:
         texto_completo = f"# NOME_LEI {nome_lei}\n" + texto_bruto
@@ -146,9 +150,10 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         linhas_validas = []
         
         def resetar_niveis_abaixo(nivel):
-            idx = ordem_hierarquia.index(nivel)
-            for k in ordem_hierarquia[idx+1:]:
-                hierarquia_ativa[k] = None
+            if nivel in ordem_hierarquia:
+                idx = ordem_hierarquia.index(nivel)
+                for k in ordem_hierarquia[idx+1:]:
+                    hierarquia_ativa[k] = None
 
         for l in texto_limpo.split('\n'):
             l = l.strip()
@@ -168,25 +173,23 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 resetar_niveis_abaixo(tipo_est)
                 continue
             
-            # --- ALGORITMO DE AGLUTINAÇÃO INTELIGENTE (FURA QUEBRAS DO PLANALTO) ---
+            # --- ALGORITMO DE AGLUTINAÇÃO INTELIGENTE ---
             if linhas_validas:
                 ultimo_token = linhas_validas[-1]
-                texto_anterior = ultimo_token['resto'] if ultimo_token['tipo'] != 'TEXTO' else ultimo_token['texto']
+                texto_anterior = ultimo_token['resto'] if ultimo_token['tipo'] != 'TEXTO' else ultimo_token.get('texto', '')
                 
                 is_pena = l.lower().startswith('pena')
                 is_nota_rodape = bool(re.search(r'^\s*[\(\[]?(Lei|Redação|Incluído|Vide|Revogado|Acrescentado|Decreto|Medida)', l, re.IGNORECASE))
                 is_continuacao_direta = l[0].islower() or l.startswith(',') or l.startswith(';') or l.startswith('.') or l.startswith(')')
                 
-                # Verifica se a linha anterior terminou com um conector óbvio cortado a meio
                 terminou_pendente = bool(re.search(r'(Lei|nº|n°|no|do|da|pela|pelo|de|em|\()\s*$', texto_anterior, re.IGNORECASE))
-                # Verifica se a linha atual completa uma citação isolada (ex: "15.397, de 2026)")
                 completa_citacao = bool(re.search(r'^\s*\d+.*?de\s+\d{4}\)', l))
 
                 if not is_pena and (is_continuacao_direta or is_nota_rodape or terminou_pendente or completa_citacao):
                     if ultimo_token['tipo'] in ['ARTIGO', 'PARAGRAFO', 'INCISO', 'ALINEA']:
                         linhas_validas[-1]['resto'] = (linhas_validas[-1]['resto'] + " " + l).strip()
                     else:
-                        linhas_validas[-1]['texto'] = (linhas_validas[-1]['texto'] + " " + l).strip()
+                        linhas_validas[-1]['texto'] = (linhas_validas[-1].get('texto', '') + " " + l).strip()
                     continue
             # -----------------------------------------------------------------------
 
@@ -224,23 +227,16 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         if bloco_artigo_atual:
             artigos_brutos_totais.append(bloco_artigo_atual)
 
-    artigos_filtrados = []    
-    # 1. ADICIONE ESTA LINHA PARA DETETAR A FLAG DO VADE COMPLETO
-    modo_completo = "VADE COMPLETO" in anos_alvo
+    # ==========================================
+    # FILTRO (AGORA APENAS UM LOOP - REMOVIDAS AS DUPLICAÇÕES)
+    # ==========================================
+    artigos_filtrados = []
 
     for b in artigos_brutos_totais:
-        
-        # 2. SE FOR MODO COMPLETO, ADICIONA O ARTIGO INTEIRO À LISTA FINAL E SALTA O RESTO DA ANÁLISE!
         if modo_completo:
             artigos_filtrados.append(b)
             continue
             
-        texto_caput = b['artigo'].get('nome', '') + " " + b['artigo'].get('resto', '')
-        caput_tem_ano = any(ano in texto_caput for ano in anos_alvo)
-        
-        regex_novo = rf'\((Incluído|Acrescentado|Inserido|Redação dada).*?({regex_anos})\)'
-        # ... resto do código existente do bisturi ...
-    for b in artigos_brutos_totais:
         texto_caput = b['artigo'].get('nome', '') + " " + b['artigo'].get('resto', '')
         caput_tem_ano = any(ano in texto_caput for ano in anos_alvo)
         
@@ -299,9 +295,12 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         b['conteudo'] = sub_itens_alterados
         artigos_filtrados.append(b)
 
+    # ==========================================
+    # GERAÇÃO DO LATEX E DO PDF FINAL
+    # ==========================================
     documento_latex = []
     documento_latex.append(r"\documentclass[10pt,a4paper,twocolumn]{article}") 
-    documento_latex.append(r"\usepackage[utf8x]{inputenc}")
+    documento_latex.append(r"\usepackage[utf8]{inputenc}") # CORRIGIDO PARA utf8
     documento_latex.append(r"\usepackage[T1]{fontenc}")
     documento_latex.append(r"\usepackage[brazilian]{babel}")
     documento_latex.append(r"\usepackage{lmodern}") 
@@ -310,7 +309,7 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     documento_latex.append(r"\usepackage[most]{tcolorbox}")
     documento_latex.append(r"\usepackage{xcolor}")
     documento_latex.append(r"\usepackage[hidelinks]{hyperref}")    
-    # SÓ CARREGA O MICROTYPE SE NÃO FOR O VADE COMPLETO GIGANTE
+
     if not modo_completo:
         documento_latex.append(r"\usepackage[protrusion=true,expansion=false]{microtype}") 
         
@@ -321,15 +320,12 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     documento_latex.append(r"\begin{document}")
     
     documento_latex.append(r"\twocolumn[{")
-    # 1. Abrimos o center AQUI
-    documento_latex.append(r"  \begin{center}{\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\par\vspace{0.2cm}")
-    
-    # 2. Mantemos o texto da autora (repare que REMOVI o \end{center} que estava no final desta linha)
+    documento_latex.append(r"  \begin{center}")
+    documento_latex.append(r"  {\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\par\vspace{0.3cm}")
+    documento_latex.append(r"  {\Large \textbf{VADE MECUM LAPEJURI}}\par\vspace{0.2cm}")
     documento_latex.append(r"  {\large Desenvolvido por: Marianne Ramos Ferreira}\par\vspace{0.2cm}")
-    
-    # 3. Colocamos as atualizações e fechamos o center APENAS UMA VEZ no final
-    # (Adicionei também uma proteção com 'str(a)' para evitar que anos em formato numérico quebrem o código)
-    documento_latex.append(r"  {\large Atualizações: " + ", ".join([str(a) for a in anos_alvo]) + r"}\par\vspace{0.6cm}\end{center}")
+    documento_latex.append(r"  {\large Atualizações: " + ", ".join([str(a) for a in anos_alvo]) + r"}\par\vspace{0.6cm}")
+    documento_latex.append(r"  \end{center}")
     documento_latex.append(r"}]")
     
     documento_latex.append(r"\renewcommand{\contentsname}{Índice de Leis e Artigos Alterados}")
@@ -341,22 +337,14 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
         if em_lista_alinea: documento_latex.append("        \\end{enumerate}"); em_lista_alinea = False
         if em_lista_inciso: documento_latex.append("    \\end{enumerate}"); em_lista_inciso = False
 
-    last_printed = {k: None for k in ordem_hierarquia}
-
-    # ADICIONE ESTA LINHA (se ainda não tiver) antes do loop dos artigos:
-    # ... o seu código anterior que faz o filtro do bisturi ...
-
-    # 1. DETETA SE É O VADE COMPLETO
-    modo_completo = "VADE COMPLETO" in anos_alvo
-
-    # 2. DICIONÁRIO DE HIERARQUIA (Para não perdermos os Livros, Títulos e Capítulos)
-    niveis_hierarquia = ['PARTE', 'LIVRO', 'TITULO', 'CAPITULO', 'SECAO', 'SUBSECAO']
+    # 2. DICIONÁRIO DE HIERARQUIA COMPLETO E BLINDADO
+    niveis_hierarquia = ['NOME_LEI', 'PARTE', 'LIVRO', 'TÍTULO', 'TITULO', 'CAPÍTULO', 'CAPITULO', 'SEÇÃO', 'SECAO', 'SUBSEÇÃO', 'SUBSECAO']
     last_printed = {k: None for k in niveis_hierarquia}
 
     # 3. O LOOP PRINCIPAL
     for b in artigos_filtrados:
         
-        # --- IMPRIME A HIERARQUIA E ENVIA PARA O SUMÁRIO ---
+        # --- IMPRIME A HIERARQUIA, O NOME DA LEI E ENVIA PARA O SUMÁRIO ---
         if 'hierarquia' in b:
             for nivel in niveis_hierarquia:
                 if nivel in b['hierarquia'] and b['hierarquia'][nivel] != last_printed[nivel]:
@@ -364,35 +352,36 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                     if valor:
                         texto_nivel = limpar_texto_latex(valor)
                         
-                        # 1. Imprime o Capítulo/Título no PDF
-                        documento_latex.append(f"\\vspace{{0.4cm}}\\noindent\\begin{{center}}\\textbf{{{texto_nivel}}}\\end{{center}}\\vspace{{0.2cm}}")
-                        
-                        # 2. NOVO: Envia o Capítulo/Título para o Índice (Sumário)
-                        documento_latex.append(f"\\phantomsection\\addcontentsline{{toc}}{{section}}{{{texto_nivel}}}")
-                        
+                        # IMPRIME O NOME DA LEI BEM DESTACADO NO PDF
+                        if nivel == 'NOME_LEI':
+                            documento_latex.append(f"\\vspace{{0.8cm}}\\noindent\\begin{{center}}\\Large\\textbf{{{texto_nivel}}}\\end{{center}}\\vspace{{0.4cm}}")
+                            documento_latex.append(f"\\phantomsection\\addcontentsline{{toc}}{{part}}{{{texto_nivel}}}")
+                        else:
+                            documento_latex.append(f"\\vspace{{0.4cm}}\\noindent\\begin{{center}}\\textbf{{{texto_nivel}}}\\end{{center}}\\vspace{{0.2cm}}")
+                            documento_latex.append(f"\\phantomsection\\addcontentsline{{toc}}{{section}}{{{texto_nivel}}}")
+                            
                     last_printed[nivel] = valor
 
-        # --- IMPRIME O ARTIGO ---
+        # --- IMPRIME O ARTIGO E SALVA O ARTIGO 1º ---
         art = b['artigo']
         nome_art = limpar_texto_latex(art.get('nome', ''))
         resto_art = limpar_texto_latex(art.get('resto', ''))
         
-        if not nome_art and resto_art.lower().startswith("art"):
+        # VACINA DE FORÇA BRUTA PARA O ARTIGO 1º
+        if (not nome_art or "art" not in nome_art.lower()) and "1º" in resto_art[:10]:
+            nome_art = "Art. 1º "
+            resto_art = resto_art.replace("Art. 1º", "").replace("Art. 1", "").strip()
+        elif not nome_art and resto_art.lower().startswith("art"):
             nome_art = "Art. 1º " 
             
         documento_latex.append(r"\phantomsection")
         
-        # LÓGICA DO BYPASS (Sem caixas no Vade Completo)
         if modo_completo:
             documento_latex.append(f"\\vspace{{0.3cm}}\\noindent\\textbf{{{nome_art}}} ")
-            
-            # 3. NOVO: Envia o nome do Artigo para o Índice manualmente (já que a caixa não está lá para o fazer)
             if nome_art.strip():
                 documento_latex.append(f"\\addcontentsline{{toc}}{{subsection}}{{{nome_art}}}")
-                
         else:
             documento_latex.append(f"\\begin{{artigoBox}}{{{nome_art}}}")
-            # Se a caixa das atualizações também perdeu o sumário, forçamos aqui:
             if nome_art.strip():
                 documento_latex.append(f"\\addcontentsline{{toc}}{{subsection}}{{{nome_art}}}")
             
@@ -400,8 +389,6 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
             pref = r"\marcadorNovo " if any(a in resto_art for a in anos_alvo) and not modo_completo else ""
             documento_latex.append(f"\\noindent {pref}{resto_art}\\par\\vspace{{2pt}}")
             
-        # ... (O loop dos parágrafos e alíneas continua exatamente igual abaixo disto) ...
-        # --- IMPRIME PARÁGRAFOS E ALÍNEAS ---
         for c in b['conteudo']:
             texto_item_bruto = c.get('resto','') + c.get('texto','')
             pref_c = r"\marcadorNovo " if any(a in texto_item_bruto for a in anos_alvo) and not modo_completo else ""
@@ -430,13 +417,11 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 
         fechar_listas()
         
-        # FECHA A CAIXA OU DÁ ESPAÇAMENTO DE TEXTO
         if not modo_completo:
             documento_latex.append("\\end{artigoBox}")
         else:
             documento_latex.append("\\par") 
             
-    # FECHA O DOCUMENTO FINAL
     documento_latex.append(r"\end{document}")
     
     return "\n".join(documento_latex)
