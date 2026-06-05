@@ -42,7 +42,7 @@ def registar_log(texto, tipo):
     st.session_state["logs"].insert(0, {"timestamp": hora_atual, "texto": texto, "tipo": tipo})
 
 st.markdown("<h1 style='text-align: center; color: #1E293B;'>⚖️ Inteligência Documental em Lote - VADE ATUALIZADO</h1>", unsafe_allow_html=True)
-st.markdown("<h2 style='text-align: center; color: #64748B; font-size: 16px;'>Desenvolvido por: Marianne Ramos Ferreira</p>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center; color: #64748B; font-size: 16px;'>Desenvolvido por: Marianne Ramos Ferreira</h2>", unsafe_allow_html=True)
 st.divider()
 
 col_esquerda, col_direita = st.columns([1, 1])
