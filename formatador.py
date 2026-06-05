@@ -330,7 +330,7 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     documento_latex.append(r"\twocolumn[{")
     documento_latex.append(r"  \begin{center}")
     documento_latex.append(r"  {\LARGE \textbf{Compilação Exclusiva de Alterações Legislativas}}\par\vspace{0.3cm}")
-    documento_latex.append(r"  {\Large \textbf{VADE MECUM LAPEJURI}}\par\vspace{0.2cm}")
+    documento_latex.append(r"  {\Large \textbf{VADE MECUM atualizado}}\par\vspace{0.2cm}")
     documento_latex.append(r"  {\large Desenvolvido por: Marianne Ramos Ferreira}\par\vspace{0.2cm}")
     documento_latex.append(r"  {\large Atualizações: " + ", ".join([str(a) for a in anos_alvo]) + r"}\par\vspace{0.6cm}")
     documento_latex.append(r"  \end{center}")
