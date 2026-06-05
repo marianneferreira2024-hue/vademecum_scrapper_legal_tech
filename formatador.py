@@ -120,30 +120,27 @@ def limpar_texto_latex(texto):
     if not texto: return ""
     texto = str(texto)
     
-    # ... (o seu código que já lá está para limpar \ e % etc) ...
+    # 1. Garante o escape de caracteres especiais do LaTeX primeiro (se já não estiverem)
+    # Certifique-se de que o cifrão de texto comum vire \$ para não quebrar o modo matemático
+    if '\\$' not in texto:
+        texto = texto.replace('$', r'\$')
+    
+    # ... (as outras limpezas de texto que você já possui) ...
     texto = texto.replace('º', r'\textsuperscript{o}')
     texto = texto.replace('ª', r'\textsuperscript{a}')
     texto = texto.replace('§', r'\S ')
 
-    # 💉 NOVO: VACINA ANTI-SÍMBOLOS MATEMÁTICOS E UNICODE
+    # 💉 BLOCO MATEMÁTICO CORRIGIDO (Sem escapar o modo matemático)
     texto = texto.replace('≤', r'$\leq$ ')
     texto = texto.replace('≥', r'$\geq$ ')
     texto = texto.replace('×', r'$\times$ ')
     texto = texto.replace('÷', r'$\div$ ')
     texto = texto.replace('±', r'$\pm$ ')
-    texto = texto.replace('°', r'$^\circ$ ') # Símbolo de temperatura/grau geométrico (diferente de º)
-    texto = texto.replace('µ', r'$\mu$ ')    # Micro (muito comum em leis de trânsito - bafômetro)
-    texto = texto.replace('α', r'$\alpha$ ') # Alfa
-    texto = texto.replace('β', r'$\beta$ ')  # Beta
-# Coloque isto na zona onde você limpa o texto bruto da lei:
-    texto = re.sub(r'(Art\.\s*\d+)[oO0]\b', r'\1º', texto)
-    texto = re.sub(r'(§\s*\d+)[oO0]\b', r'\1º', texto)
-    if not texto: return ""
-    texto = texto.replace('§', r'\S{}~').replace('Ÿ', r'\S{}~')
-    texto = texto.replace('_', r'\_').replace('&', r'\&').replace('$', r'\$').replace('%', r'\%').replace('#', r'\#')
-    texto = texto.replace('nº', r'n.\textsuperscript{o}').replace('Nº', r'N.\textsuperscript{o}').replace('n°', r'n.\textsuperscript{o}')
-    texto = texto.replace('[TEXTO REVOGADO]', r'\textbf{\color{gray}[TEXTO REVOGADO]}')
-    texto = re.sub(r'(\((?:Redação dada|Incluído|Vide|Revogado|Acrescentado).*?\))', r'\\textit{\1}', texto)
+    texto = texto.replace('°', r'$^\circ$ ') # Corrigido: usando $ puro para abrir/fechar matemática
+    texto = texto.replace('µ', r'$\mu$ ')    
+    texto = texto.replace('α', r'$\alpha$ ') 
+    texto = texto.replace('β', r'$\beta$ ')  
+    
     return texto
 
 import re
