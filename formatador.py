@@ -129,8 +129,9 @@ def limpar_texto_latex(texto):
         texto = texto.replace('$', r'\$')
         
     # ... (suas substituições anteriores de º, ª, §) ...
-    texto = texto.replace('º', r'\textsuperscript{o}')
-    texto = texto.replace('ª', r'\textsuperscript{a}')
+# Substitua as linhas antigas de º e ª por estas:
+    texto = texto.replace('º', r'\textordmasculine ')
+    texto = texto.replace('ª', r'\textordfeminine ')
     texto = texto.replace('§', r'\S ')
 
     # 💉 BLOCO MATEMÁTICO (Mantido intacto)
