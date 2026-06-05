@@ -173,7 +173,7 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 resetar_niveis_abaixo(tipo_est)
                 continue
             
-            # --- ALGORITMO DE AGLUTINAÇÃO INTELIGENTE ---
+            # --- ALGORITMO DE AGLUTINAÇÃO INTELIGENTE (FURA QUEBRAS DO PLANALTO) ---
             if linhas_validas:
                 ultimo_token = linhas_validas[-1]
                 texto_anterior = ultimo_token['resto'] if ultimo_token['tipo'] != 'TEXTO' else ultimo_token.get('texto', '')
@@ -182,15 +182,23 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
                 is_nota_rodape = bool(re.search(r'^\s*[\(\[]?(Lei|Redação|Incluído|Vide|Revogado|Acrescentado|Decreto|Medida)', l, re.IGNORECASE))
                 is_continuacao_direta = l[0].islower() or l.startswith(',') or l.startswith(';') or l.startswith('.') or l.startswith(')')
                 
+                # Verifica se a linha anterior terminou com um conector óbvio cortado a meio
                 terminou_pendente = bool(re.search(r'(Lei|nº|n°|no|do|da|pela|pelo|de|em|\()\s*$', texto_anterior, re.IGNORECASE))
+                # Verifica se a linha atual completa uma citação isolada (ex: "15.397, de 2026)")
                 completa_citacao = bool(re.search(r'^\s*\d+.*?de\s+\d{4}\)', l))
 
-                if not is_pena and (is_continuacao_direta or is_nota_rodape or terminou_pendente or completa_citacao):
+                # --- A VACINA DO ARTIGO 1º: O ESCUDO ESTRUTURAL ---
+                # Se a linha atual for claramente o início de um Artigo, Parágrafo, Inciso ou Alínea, NUNCA aglutina!
+                is_elemento_estrutural = bool(re.match(r'^(Art\.\s*\d+|§\s*\d+|Parágrafo\s+único|[IVXLC]+\s*[\.\-–—]|[a-z]\)\s*)', l, re.IGNORECASE))
+
+                # Agora só aglutina se NÃO for um elemento estrutural
+                if not is_pena and not is_elemento_estrutural and (is_continuacao_direta or is_nota_rodape or terminou_pendente or completa_citacao):
                     if ultimo_token['tipo'] in ['ARTIGO', 'PARAGRAFO', 'INCISO', 'ALINEA']:
                         linhas_validas[-1]['resto'] = (linhas_validas[-1]['resto'] + " " + l).strip()
                     else:
                         linhas_validas[-1]['texto'] = (linhas_validas[-1].get('texto', '') + " " + l).strip()
                     continue
+            # -----------------------------------------------------------------------
             # -----------------------------------------------------------------------
 
             token = None
