@@ -9,6 +9,7 @@ import time
 st.set_page_config(page_title="VADE ATUALIZADO LegalTech", page_icon="⚖️", layout="wide")
 # ... (MANTENHA O SEU CÓDIGO app.py IGUAL ATÉ À ZONA DO BOTÃO INICIAR) ...
 MAPA_LEIS = {
+    "CONSTITUIÇÃO FEDERAL (1988)": "https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm",
     "Código Penal (Decreto-Lei nº 2.848/40)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm",
     "Código de Processo Penal (Decreto-Lei nº 3.689/41)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689.htm",
     "Lei de Crimes Hediondos (Lei nº 8.072/90)": "https://www.planalto.gov.br/ccivil_03/leis/l8072.htm",
