@@ -118,9 +118,11 @@ def limpar_texto_latex(texto):
     if not texto: return ""
     texto = str(texto)
     
-    # 1. Escapa os caracteres de código e links da web antes do bloco matemático
+    # 1. Escapa os caracteres de código, links e comentários do LaTeX
     texto = texto.replace('_', r'\_')
     texto = texto.replace('&', r'\&')
+    texto = texto.replace('#', r'\#')  # 💉 NOVA VACINA: Escapa o caractere # dos links
+    texto = texto.replace('%', r'\%')  # 💉 NOVA VACINA: Garante que % não suma com o texto
     
     # 2. Garante o escape de cifrões originais do texto
     if '\\$' not in texto:
