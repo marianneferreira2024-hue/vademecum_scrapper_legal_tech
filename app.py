@@ -6,10 +6,14 @@ import formatador
 import re
 import time
 
+# 🔫 O NOVO GATILHO IMPORTADO:
+from scraper_constituicao import baixar_constituicao_completa
+
 st.set_page_config(page_title="VADE ATUALIZADO LegalTech", page_icon="⚖️", layout="wide")
-# ... (MANTENHA O SEU CÓDIGO app.py IGUAL ATÉ À ZONA DO BOTÃO INICIAR) ...
+
+# 📝 MAPA ATUALIZADO: Incluindo a CF/88 na lista de seleção da interface
 MAPA_LEIS = {
-    "CONSTITUIÇÃO FEDERAL (1988)": "https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm",
+    "Constituição Federal (1988)": "https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm",
     "Código Penal (Decreto-Lei nº 2.848/40)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm",
     "Código de Processo Penal (Decreto-Lei nº 3.689/41)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689.htm",
     "Lei de Crimes Hediondos (Lei nº 8.072/90)": "https://www.planalto.gov.br/ccivil_03/leis/l8072.htm",
@@ -18,7 +22,7 @@ MAPA_LEIS = {
     "Código de Processo Civil (Lei nº 13.105/2015)": "https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2015/lei/l13105.htm",
     "Código Tributário Nacional (Lei nº 5.172/1967)": "https://www.planalto.gov.br/ccivil_03/leis/l5172.htm",
     "Consolidação das Leis do Trabalho (Decreto-Lei nº 5.430/1943)": "https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm",
-    "Código de Defesa do Consumidor (Lei nº 8.078/1990)": "https://www.planalto.gov.br/ccivil_03/leis/l8078.htm",
+    "Código de Defense do Consumidor (Lei nº 8.078/1990)": "https://www.planalto.gov.br/ccivil_03/leis/l8078.htm",
     "Código Eleitoral (Lei nº 4.737/1965)": "https://www.planalto.gov.br/ccivil_03/leis/l4737.htm",
     "Estatuto da Criança e do Adolescente (Lei nº 12.525/2011)": "https://www.planalto.gov.br/ccivil_03/leis/l8069.htm",
     "Estatuto da Pessoa Idosa (Lei nº 10.741/2003)": "https://www.planalto.gov.br/ccivil_03/leis/2003/l10.741.htm",
@@ -92,7 +96,6 @@ with col_esquerda:
     col_anos1, col_anos2 = st.columns([2, 1])
     
     with col_anos1:
-        # CORREÇÃO 1: "VADE COMPLETO" com aspas e anos tratados como texto
         anos_disponiveis = ["VADE COMPLETO", "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027"]
         anos_selecionados = st.multiselect(
             "Selecione os anos alvo na lista:",
@@ -115,12 +118,13 @@ with col_esquerda:
     # Remove duplicados
     anos_finais = sorted(list(set(anos_finais)), key=str)
 
-    # CORREÇÃO 2: Apenas ativamos a flag de aviso, a lista de leis já foi preenchida lá em cima!
+    # Alinhamento das mensagens na Interface (Fora de qualquer função invisível)
     if "VADE COMPLETO" in anos_finais:
         st.warning("⚠️ 'VADE COMPLETO' selecionado: O documento será compilado na íntegra, ignorando os recortes por ano. Se deseja todo o conteúdo, mantenha 'VADE COMPLETO' selecionado e certifique-se de que as leis escolhidas estão corretas.")
     else:
         st.success(f"✂️ Modo Atualizações. Aplicando o bisturi para: {', '.join([str(a) for a in anos_finais])}")
 
+    # --- EXECUÇÃO DO BOTÃO PRINCIPAL DE COMPILAÇÃO ---
     if st.button("🚀 Iniciar Coleta e Compilação Automática", use_container_width=True):
         if not anos_finais:
             st.warning("⚠️ Selecione ou digite pelo menos um ano para servir de filtro de alterações.")
@@ -142,8 +146,16 @@ with col_esquerda:
                     url_higienizada = "".join(url_higienizada.split()).replace('"', '').replace("'", "")
                     
                     registar_log(f"Processando link: {url_higienizada}", "Scraping")
-                    texto_extraido = formatador.raspar_portal_planalto(url_higienizada)
                     
+                    # 🎯 🔫 O GATILHO DA CONSTITUIÇÃO: Intercepta antes de chamar o extrator genérico!
+                    if "constituicao" in url_higienizada.lower() or "constituição" in nome_lei.lower():
+                        registar_log(f"🚀 [GATILHO ATIVADO] Executando minerador avançado com preâmbulo para CF/88.", "Info")
+                        texto_extraido = baixar_constituicao_completa()
+                    else:
+                        # Mantém o raspador padrão do formatador para as demais leis normais
+                        texto_extraido = formatador.raspar_portal_planalto(url_higienizada)
+                    
+                    # Validação de segurança do texto minerado
                     if texto_extraido.startswith("Erro"):
                         st.error(f"Falha na extração de: {nome_lei}. Detalhe: {texto_extraido}")
                         registar_log(f"Erro em {nome_lei}: {texto_extraido}", "Erro")
@@ -152,7 +164,8 @@ with col_esquerda:
                         fila_compilacao.append((nome_lei, texto_extraido))
                     
                     barra_progresso.progress((i + 1) / total_itens)
-                    time.sleep(2.5)  # Delay para evitar bloqueios
+                    time.sleep(2.5)  # Delay estrutural para evitar bloqueios do servidor WAF do governo
+                    
                 status_coleta.empty()
                 barra_progresso.empty()
             else:
@@ -162,7 +175,6 @@ with col_esquerda:
                 with st.spinner("⚙️ Compilando PDF Unificado via MiKTeX (Dupla Passagem para Sumário)..."):
                     registar_log(f"Iniciando montagem do lote com {len(fila_compilacao)} itens.", "Info")
                     
-                    # Chamada corrigida e limpa
                     status, resultado = formatador.compilar_pdf(
                         fila_compilacao, 
                         nome_base="VadeMecum_Minerado", 
@@ -196,12 +208,8 @@ with col_direita:
                 use_container_width=True
             )
             
-        import base64
-
-        # 1. Converte os dados binários do PDF para string Base64
         base64_pdf = base64.b64encode(dados_pdf).decode('utf-8')
         
-        # 2. Constrói o HTML com JavaScript para gerar o Blob seguro em memória
         html_preview = f"""
         <iframe id="pdf-viewer" width="100%" height="580px" style="border:1px solid #64748B; border-radius:8px;"></iframe>
         <script>
@@ -221,6 +229,4 @@ with col_direita:
             }}
         </script>
         """
-        
-        # 3. Renderiza usando o novo método nativo st.iframe (Garante compatibilidade pós-01/06/2026)
         st.iframe(html_preview, height=600)
