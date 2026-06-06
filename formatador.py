@@ -106,17 +106,8 @@ def raspar_portal_planalto(url):
     except Exception as e:
         return f"Erro de conexão: {str(e)}"
 
-from scraper_constituicao import baixar_constituicao_completa
-from formatador import limpar_texto_latex  # sua função de tratamento do LaTeX
 
-def gerar_bloco_constituicao():
-    # 1. Roda o scraper isolado e inteligente
-    texto_cf = baixar_constituicao_completa()
-    
-    # 2. Aplica a sua função de conversão para comandos do LaTeX (\textordmasculine, etc)
-    texto_pronto_para_latex = limpar_texto_latex(texto_cf)
-    
-    return texto_pronto_para_latex
+
 
 def higienizar_unicodes(texto):
     if not texto: return ""
