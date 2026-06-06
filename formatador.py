@@ -5,7 +5,7 @@ import subprocess
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, FeatureNotFound
 
 def raspar_portal_planalto(url):
     try:
@@ -37,15 +37,19 @@ def raspar_portal_planalto(url):
         if resposta.status_code != 200:
             return f"Erro: Status Code: {resposta.status_code}"
             
-# 🧠 Tenta usar o html5lib (Cérebro do Chrome). Se não encontrar, usa o lxml. 
-        # Estes motores são imunes aos erros de fecho de tags do Planalto!
+# 🧠 Tenta usar o html5lib. Se falhar, tenta o lxml. Se tudo falhar, usa o padrão.
         try:
             soup = BeautifulSoup(resposta.text, 'html5lib')
-        except ImportError:
+        except FeatureNotFound:
             try:
                 soup = BeautifulSoup(resposta.text, 'lxml')
-            except ImportError:
-                soup = BeautifulSoup(resposta.text, 'html.parser')        
+            except FeatureNotFound:
+                soup = BeautifulSoup(resposta.text, 'html.parser')
+        except Exception as e:
+            # Captura qualquer outro erro maluco e força o modo padrão
+            print(f"Aviso de parser: {e}. Usando html.parser como fallback.")
+            soup = BeautifulSoup(resposta.text, 'html.parser')
+
         # 1. DESTRUIR LIXO (Remove textos revogados)
         for tag in soup.find_all(['strike', 'del', 's', 'script', 'style']):
             tag.decompose()
