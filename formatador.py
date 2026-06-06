@@ -72,9 +72,10 @@ def raspar_portal_planalto(url):
         # (Se houver uma letra ou pontuação antes do "Art.", obriga a ir para a linha de baixo)
         texto_bruto = re.sub(r'([a-zA-ZÀ-ÿ:;.])\s*(Art\.\s*\d+)', r'\1\n\2', texto_bruto)
         
-        # B. CORREÇÃO DE GRAUS (Somente para artigos de 1 a 9)
-        texto_bruto = re.sub(r'(Art\.\s*[1-9])[oO]\b', r'\1º', texto_bruto)
-        texto_bruto = re.sub(r'(§\s*[1-9])[oO]\b', r'\1º', texto_bruto)
+       # B. CORREÇÃO DE GRAUS (Somente para artigos de 1 a 9)
+        # Adicionado o símbolo ° dentro dos parêntesis retos
+        texto_bruto = re.sub(r'(Art\.\s*[1-9])[oO°]\b', r'\1º', texto_bruto)
+        texto_bruto = re.sub(r'(§\s*[1-9])[oO°]\b', r'\1º', texto_bruto)
         
         # C. GARANTE O ESPAÇO APÓS O GRAU (Ex: "Art. 1ºToda pessoa" -> "Art. 1º Toda pessoa")
         texto_bruto = re.sub(r'(Art\.\s*\d+º)(?=[^\s-])', r'\1 ', texto_bruto)
@@ -130,6 +131,7 @@ def limpar_texto_latex(texto):
         
     # ... (suas substituições anteriores de º, ª, §) ...
 # Substitua as linhas antigas de º e ª por estas:
+    texto = texto.replace('°', 'º') # 1º Converte o grau de temperatura do Planalto em ordinal
     texto = texto.replace('º', r'\textordmasculine ')
     texto = texto.replace('ª', r'\textordfeminine ')
     texto = texto.replace('§', r'\S ')
@@ -523,3 +525,21 @@ def compilar_pdf(lista_leis, nome_base="VadeMecum_Minerado", anos_destaque=None)
         return "erro", f"Log LaTeX:\n{detalhe_erro}\n\nErro Sistema:\n{erro_stderr}"
     except Exception as e:
         return "erro", f"Falha de execução: {str(e)}"
+    
+    
+import traceback
+
+try:
+    print("🚀 Iniciando o processamento completo da Constituição...")
+    
+    # 🔍 EXECUTE A SUA FUNÇÃO DA CONSTITUIÇÃO AQUI
+    # Exemplo: gerar_constituicao_completa()
+    
+    print("✅ Constituição gerada com sucesso!")
+except Exception as e:
+    print(f"💥 O Python travou no meio da Constituição: {e}")
+    
+    # Cria o relatório de erro definitivo
+    with open("erro_vademecum.txt", "w", encoding="utf-8") as f:
+        traceback.print_exc(file=f)
+    print("📂 O arquivo detalhado 'erro_vademecum.txt' foi gerado. Abra-o para ver a linha do erro!")
