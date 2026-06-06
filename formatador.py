@@ -37,8 +37,15 @@ def raspar_portal_planalto(url):
         if resposta.status_code != 200:
             return f"Erro: Status Code: {resposta.status_code}"
             
-        soup = BeautifulSoup(resposta.text, 'html.parser')
-        
+# 🧠 Tenta usar o html5lib (Cérebro do Chrome). Se não encontrar, usa o lxml. 
+        # Estes motores são imunes aos erros de fecho de tags do Planalto!
+        try:
+            soup = BeautifulSoup(resposta.text, 'html5lib')
+        except ImportError:
+            try:
+                soup = BeautifulSoup(resposta.text, 'lxml')
+            except ImportError:
+                soup = BeautifulSoup(resposta.text, 'html.parser')        
         # 1. DESTRUIR LIXO (Remove textos revogados)
         for tag in soup.find_all(['strike', 'del', 's', 'script', 'style']):
             tag.decompose()
