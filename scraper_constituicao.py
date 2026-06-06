@@ -15,9 +15,16 @@ def baixar_constituicao_completa():
     except Exception as e:
         return f"Erro ao acessar o site: {e}"
 
-    print("🧠 Parseando HTML com motor avançado (html5lib)...")
-    # O html5lib reconstrói tags de <strike> ou <font> que o governo esqueceu de fechar perto do Art. 24
-    soup = BeautifulSoup(resposta.text, 'html5lib')
+    print("🧠 Parseando HTML com motor avançado...")
+    from bs4 import FeatureNotFound
+    
+    try:
+        soup = BeautifulSoup(resposta.text, 'html5lib')
+    except FeatureNotFound:
+        try:
+            soup = BeautifulSoup(resposta.text, 'lxml')
+        except FeatureNotFound:
+            soup = BeautifulSoup(resposta.text, 'html.parser')
 
     # 1. PURGA DO LIXO (Limpa scripts, estilos e notas laterais inúteis)
     for lixo in soup.find_all(['script', 'style', 'head', 'title']):
