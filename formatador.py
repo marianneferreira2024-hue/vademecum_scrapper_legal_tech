@@ -330,6 +330,7 @@ def formatar_codigo_penal_para_latex(lista_leis, anos_destaque=None):
     documento_latex.append(r"\usepackage[T1]{fontenc}")
     documento_latex.append(r"\usepackage[brazilian]{babel}")
     documento_latex.append(r"\usepackage{lmodern}") 
+    documento_latex.append(r"\usepackage{textcomp}")
     documento_latex.append(r"\usepackage[top=1.6cm,bottom=1.8cm,left=1.2cm,right=1.2cm]{geometry}")
     documento_latex.append(r"\usepackage{enumitem}")
     documento_latex.append(r"\usepackage[most]{tcolorbox}")
