@@ -1,216 +1,310 @@
 import re
 import os
-import io
-import unicodedata
 import subprocess
+import tempfile
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 
-# ==========================================
-# 1. SCRAPER DE DADOS
-# ==========================================
 def raspar_portal_planalto(url):
+    """Realiza a extração do texto HTML do portal do Planalto e converte para texto estruturado."""
     try:
-        url_limpa = str(url).strip().replace('"', '').replace("'", "").replace('`', '')
-        url_limpa = "".join(url_limpa.split())
-        
-        if not url_limpa.lower().startswith("http"):
-            return f"Erro: A URL fornecida não é válida: '{url_limpa}'"
-
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        resposta = requests.get(url_limpa, headers=headers, timeout=20)
-        resposta.encoding = 'utf-8' if resposta.encoding not in ['ISO-8859-1', 'iso-8859-1'] else 'iso-8859-1'
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        resposta = requests.get(url, headers=headers, timeout=15)
+        resposta.encoding = resposta.apparent_encoding or 'utf-8'
         
         if resposta.status_code != 200:
-            return f"Erro: Status Code: {resposta.status_code}"
+            return f"Erro na requisição: Código HTTP {resposta.status_code}"
             
         soup = BeautifulSoup(resposta.text, 'html.parser')
-        linhas_texto = [p.get_text().strip() for p in soup.find_all(['p', 'span', 'font']) if p.get_text().strip()]
-        return "\n".join(linhas_texto) if linhas_texto else "Erro: Não foi possível extrair dados."
+        
+        for elem in soup.find_all(['strike', 's', 'del']):
+            elem.decompose()
+            
+        texto = soup.get_text(separator='\n')
+        linhas = [linha.strip() for linha in texto.splitlines() if linha.strip()]
+        return '\n'.join(linhas)
     except Exception as e:
-        return f"Erro de conexão: {str(e)}"
+        return f"Erro ao aceder ao endereço URL: {str(e)}"
 
-# ==========================================
-# 2. MOTOR EXCEL (NOVA FUNCIONALIDADE)
-# ==========================================
-def processar_texto_para_dataframe(texto_bruto, diploma_legal, apenas_recentes=False, anos_destaque=None):
-    """
-    Estrutura os dados na tabela: DIPLOMA LEGAL | DISPOSITIVO | TEXTO
-    Agrupa Caput + Parágrafos + Incisos + Alíneas numa única célula por artigo.
-    """
-    years = ['2024', '2025', '2026'] if anos_destaque is None else [str(a) for a in anos_destaque]
-    padrao_anos = re.compile(r'\b(' + '|'.join(years) + r')\b')
-    padrao_artigo = re.compile(r'^(Art\.\s*\d+[\w\-°º]*\.?)', re.IGNORECASE)
 
+def parse_texto_legal(texto_bruto):
+    """Transforma o texto bruto em blocos estruturados de artigos e sub-itens."""
     linhas = texto_bruto.split('\n')
-    artigos_extraidos = []
+    artigos = []
     artigo_atual = None
-    texto_acumulado = []
-    tem_ano_recente = False
+    
+    regex_artigo = re.compile(r'^(Art\.\s*\d+[\w\-]*°?[\w\-]*)\s*[\.\-–—]?\s*(.*)', re.IGNORECASE)
+    regex_paragrafo = re.compile(r'^(§\s*\d+°?|Parágrafo\s+único)\s*[\.\-–—]?\s*(.*)', re.IGNORECASE)
+    regex_inciso = re.compile(r'^(M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3}))\s*[\.\-–—]\s*(.*)', re.IGNORECASE)
+    regex_alinea = re.compile(r'^([a-z])\)\s*(.*)')
 
     for linha in linhas:
         linha = linha.strip()
-        if not linha or "googleusercontent" in linha or "immersive_entry" in linha:
+        if not linha:
             continue
-
-        match_art = padrao_artigo.match(linha)
-        
+            
+        match_art = regex_artigo.match(linha)
         if match_art:
             if artigo_atual:
-                if not apenas_recentes or tem_ano_recente:
-                    artigos_extraidos.append({
-                        "DIPLOMA LEGAL": diploma_legal,
-                        "DISPOSITIVO": artigo_atual,
-                        "TEXTO": "\n".join(texto_acumulado)
-                    })
-            
-            artigo_atual = match_art.group(1).upper()
-            texto_acumulado = [linha]
-            tem_ano_recente = bool(padrao_anos.search(linha))
+                artigos.append(artigo_atual)
+            artigo_atual = {
+                'artigo': {'nome': match_art.group(1), 'resto': match_art.group(2)},
+                'conteudo': []
+            }
+            continue
+
+        if artigo_atual:
+            match_par = regex_paragrafo.match(linha)
+            if match_par:
+                artigo_atual['conteudo'].append({'tipo': 'PARAGRAFO', 'nome': match_par.group(1), 'resto': match_par.group(2)})
+                continue
+
+            match_inc = regex_inciso.match(linha)
+            if match_inc and len(match_inc.group(1)) > 0:
+                artigo_atual['conteudo'].append({'tipo': 'INCISO', 'nome': match_inc.group(1), 'resto': match_inc.group(4)})
+                continue
+
+            match_ali = regex_alinea.match(linha)
+            if match_ali:
+                artigo_atual['conteudo'].append({'tipo': 'ALINEA', 'nome': match_ali.group(1), 'resto': match_ali.group(2)})
+                continue
+
+            artigo_atual['conteudo'].append({'tipo': 'TEXTO', 'nome': '', 'resto': linha})
+
+    if artigo_atual:
+        artigos.append(artigo_atual)
+
+    return artigos
+
+
+def filtrar_artigos(artigos_brutos_totais, anos_destaque=None):
+    """Filtra artigos conforme o modo selecionado (Vade Completo vs Recorte por Anos)."""
+    if not anos_destaque:
+        anos_destaque = ['2024', '2025', '2026']
+        
+    anos_alvo = [str(a).upper() for a in anos_destaque]
+    modo_completo = "VADE COMPLETO" in anos_alvo
+
+    if modo_completo:
+        return artigos_brutos_totais
+
+    regex_anos = '|'.join([a for a in anos_alvo if a != "VADE COMPLETO"])
+    artigos_filtrados = []
+
+    for b in artigos_brutos_totais:
+        texto_caput = b['artigo'].get('nome', '') + " " + b['artigo'].get('resto', '')
+        caput_tem_ano = any(ano in texto_caput for ano in anos_alvo if ano != "VADE COMPLETO")
+        
+        regex_novo = rf'\((Incluído|Acrescentado|Inserido|Redação dada).*?({regex_anos})\)'
+        caput_novo_integral = caput_tem_ano and re.search(regex_novo, texto_caput, re.IGNORECASE)
+        
+        if caput_novo_integral:
+            sub_itens_alterados = b['conteudo']
         else:
-            if artigo_atual:
-                texto_acumulado.append(linha)
-                if padrao_anos.search(linha):
-                    tem_ano_recente = True
-
-    if artigo_atual and (not apenas_recentes or tem_ano_recente):
-        artigos_extraidos.append({
-            "DIPLOMA LEGAL": diploma_legal,
-            "DISPOSITIVO": artigo_atual,
-            "TEXTO": "\n".join(texto_acumulado)
-        })
-
-    return pd.DataFrame(artigos_extraidos)
-
-def gerar_buffer_excel(df):
-    """Gera o arquivo .xlsx em memória para download no Streamlit."""
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Base_Planalto')
-    output.seek(0)
-    return output
-
-# ==========================================
-# 3. MOTOR LATEX / PDF (MANTIDO INTACTO)
-# ==========================================
-def escapar_caracteres_latex(texto):
-    if not texto: return ""
-    texto = unicodedata.normalize('NFC', texto)
-    texto = "".join(ch for ch in texto if unicodedata.category(ch)[0] != "C" or ch == '\n')
-    
-    texto = texto.replace('—', '-').replace('–', '-').replace('“', '"').replace('”', '"').replace('‘', "'").replace('’', "'")
-    texto = texto.replace('\\', r'\textbackslash{}')
-    texto = texto.replace('$', r'\$').replace('%', r'\%').replace('&', r'\&')
-    texto = texto.replace('#', r'\#').replace('_', r'\_').replace('{', r'\{')
-    texto = texto.replace('}', r'\}').replace('^', r'\^{}').replace('~', r'\~{}')
-    return texto
-
-def formatar_codigo_penal_para_latex(texto_bruto, anos_destaque=None):
-    years = ['2024', '2025', '2026'] if anos_destaque is None else [str(a) for a in anos_destaque]
-    padrao_anos = re.compile(r'\b(' + '|'.join(years) + r')\b')
-    linhas = texto_bruto.split('\n')
-    
-    documento_latex = [
-        r"\documentclass[10pt,a4paper,twocolumn]{article}",
-        r"\usepackage[T1]{fontenc}",
-        r"\usepackage[utf8]{inputenc}",
-        r"\usepackage[brazilian]{babel}",
-        r"\usepackage[top=1.8cm,bottom=1.8cm,left=1.2cm,right=1.2cm]{geometry}",
-        r"\usepackage[most]{tcolorbox}",
-        r"\sloppy",
-        r"\newtcolorbox{notalegislativa}{colback=gray!6,colframe=gray!50,arc=0.8mm,boxrule=0.5pt,left=1.5mm,right=1.5mm,top=1mm,bottom=1mm}",
-        r"\title{\textbf{Vade Mecum: Novidades Legislativas}}",
-        r"\author{Laboratório LAPEJURI}",
-        r"\date{\today}",
-        r"\begin{document}",
-        r"\maketitle",
-        r"\newpage",
-        ""
-    ]
-
-    articles = []
-    current_article = {"header": None, "paragraphs": [], "has_year": False}
-
-    for linha in linhas:
-        linha = linha.strip()
-        if not linha or "googleusercontent" in linha or "immersive_entry" in linha: continue
-        
-        if re.match(r'^Art\.\s*', linha):
-            if current_article["header"] or current_article["paragraphs"]:
-                articles.append(current_article)
-            current_article = {"header": linha, "paragraphs": [], "has_year": bool(padrao_anos.search(linha))}
-        else:
-            if current_article["header"] is None: continue
-            has_yr = bool(padrao_anos.search(linha))
-            current_article["paragraphs"].append({"text": linha, "has_year": has_yr})
-            if has_yr: current_article["has_year"] = True
-
-    if current_article["header"] or current_article["paragraphs"]:
-        articles.append(current_article)
-
-    for art in articles:
-        if not art["has_year"]: continue
-        
-        paragrafos_recentes = [p for p in art["paragraphs"] if p["has_year"]]
-        header_tem_ano = bool(padrao_anos.search(art["header"]))
-        
-        if not paragrafos_recentes and not header_tem_ano: continue
-
-        header_esc = escapar_caracteres_latex(art["header"])
-        documento_latex.append(f"\n\\subsection*{{{header_esc}}}")
-        documento_latex.append("\\begin{notalegislativa}")
-
-        if not header_tem_ano:
-            documento_latex.append(r"\textit{\small [Exibindo apenas trechos recentes modificados:]} \\")
-
-        for i, p in enumerate(paragrafos_recentes):
-            texto_esc = escapar_caracteres_latex(p["text"])
-            sufixo = " \\\\" if i < len(paragrafos_recentes) - 1 else ""
-            documento_latex.append(f"\\noindent {texto_esc}{sufixo}")
+            itens_para_manter = set()
+            idx_paragrafo_atual = -1
+            idx_inciso_atual = -1
+            idx_alinea_atual = -1
+            ultimo_estrutural = -1
             
-        documento_latex.append("\\end{notalegislativa}")
+            for i, c in enumerate(b['conteudo']):
+                tipo = c['tipo']
+                if tipo == 'PARAGRAFO': 
+                    idx_paragrafo_atual = i
+                    idx_inciso_atual = -1 
+                    idx_alinea_atual = -1
+                    ultimo_estrutural = i
+                elif tipo == 'INCISO': 
+                    idx_inciso_atual = i
+                    idx_alinea_atual = -1
+                    ultimo_estrutural = i
+                elif tipo == 'ALINEA':
+                    idx_alinea_atual = i
+                    ultimo_estrutural = i
 
-    documento_latex.append("\n\\end{document}")
-    return "\n".join(documento_latex)
+                texto_c = c.get('nome', '') + " " + c.get('resto', '') + " " + c.get('texto', '')
+                is_pena = (tipo == 'TEXTO' and texto_c.strip().lower().startswith('pena'))
+                
+                if any(ano in texto_c for ano in anos_alvo if ano != "VADE COMPLETO") or (caput_tem_ano and is_pena):
+                    itens_para_manter.add(i)
+                    if tipo == 'ALINEA':
+                        if idx_inciso_atual != -1: itens_para_manter.add(idx_inciso_atual)
+                        if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
+                    elif tipo == 'INCISO':
+                        if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
+                    elif tipo == 'TEXTO':
+                        if ultimo_estrutural != -1:
+                            itens_para_manter.add(ultimo_estrutural)
+                            parent_tipo = b['conteudo'][ultimo_estrutural]['tipo']
+                            if parent_tipo == 'ALINEA':
+                                if idx_inciso_atual != -1: itens_para_manter.add(idx_inciso_atual)
+                                if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
+                            elif parent_tipo == 'INCISO':
+                                if idx_paragrafo_atual != -1: itens_para_manter.add(idx_paragrafo_atual)
 
-def compilar_pdf(texto_bruto, nome_base="VadeMecum_Minerado", anos_destaque=None):
-    diretorio_atual = os.path.dirname(os.path.abspath(__file__))
-    arquivo_tex = os.path.join(diretorio_atual, f"{nome_base}.tex")
-    arquivo_pdf = os.path.join(diretorio_atual, f"{nome_base}.pdf")
+            sub_itens_alterados = [c for i, c in enumerate(b['conteudo']) if i in itens_para_manter]
+        
+        if not caput_tem_ano and len(sub_itens_alterados) == 0:
+            continue
+            
+        b_copia = dict(b)
+        b_copia['conteudo'] = sub_itens_alterados
+        artigos_filtrados.append(b_copia)
+
+    return artigos_filtrados
+
+
+def escapar_latex(texto):
+    """Escapa caracteres especiais do LaTeX."""
+    substituicoes = {
+        '&': r'\&', '%': r'\%', '$': r'\$', '#': r'\#', '_': r'\_',
+        '{': r'\{', '}': r'\}', '~': r'\textasciitilde{}', '^': r'\textasciicircum{}', '\\': r'\textbackslash{}'
+    }
+    regex = re.compile('|'.join(re.escape(k) for k in substituicoes.keys()))
+    return regex.sub(lambda m: substituicoes[m.group(0)], str(texto))
+
+
+def gerar_codigo_latex(fila_compilacao, anos_destaque):
+    """Gera o código fonte LaTeX para compilação do documento."""
+    modo_completo = "VADE COMPLETO" in [str(a).upper() for a in anos_destaque]
     
-    codigo_tex = formatar_codigo_penal_para_latex(texto_bruto, anos_destaque)
+    latex = r"""\documentclass[10pt,a4paper,twocolumn]{article}
+\usepackage[utf8]{utf8}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[pt-BR]{babel}
+\usepackage[margin=1.5cm,top=2cm,bottom=2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+
+\definecolor{primary}{HTML}{1E293B}
+\definecolor{accent}{HTML}{2563EB}
+\definecolor{bgbox}{HTML}{F8FAFC}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\textcolor{gray}{\small Vade Mecum LegalTech}}
+\lhead{\textcolor{gray}{\small Compilação de Legislação}}
+\cfoot{\thepage}
+
+\begin{document}
+"""
+
+    for nome_lei, texto_bruto in fila_compilacao:
+        latex += f"\\section*{{\\centering \\color{{primary}} {escapar_latex(nome_lei)}}}\n"
+        latex += "\\hrule\\vspace{0.3cm}\n\n"
+        
+        artigos_brutos = parse_texto_legal(texto_bruto)
+        artigos_processados = filtrar_artigos(artigos_brutos, anos_destaque)
+        
+        for art in artigos_processados:
+            caput_nome = escapar_latex(art['artigo']['nome'])
+            caput_resto = escapar_latex(art['artigo']['resto'])
+            
+            if modo_completo:
+                latex += f"\\textbf{{{caput_nome}}} {caput_resto}\n\n"
+            else:
+                latex += f"\\begin{{tcolorbox}}[colback=bgbox,colframe=accent,arc=2pt,outer arc=2pt,top=2pt,bottom=2pt,left=4pt,right=4pt]\n"
+                latex += f"\\textbf{{{caput_nome}}} {caput_resto}\n"
+                latex += f"\\end{{tcolorbox}}\n\n"
+                
+            for sub in art['conteudo']:
+                tipo = sub['tipo']
+                nome = escapar_latex(sub.get('nome', ''))
+                resto = escapar_latex(sub.get('resto', ''))
+                
+                if tipo == 'PARAGRAFO':
+                    latex += f"\\noindent \\textbf{{{nome}}} {resto}\\\\ \n"
+                elif tipo == 'INCISO':
+                    latex += f"\\indent \\textbf{{{nome}}} - {resto}\\\\ \n"
+                elif tipo == 'ALINEA':
+                    latex += f"\\indent\\indent \\textbf{{{nome}}}) {resto}\\\\ \n"
+                else:
+                    latex += f"\\noindent {resto}\\\\ \n"
+            latex += "\\vspace{0.2cm}\n"
+
+    latex += r"\end{document}"
+    return latex
+
+
+def compilar_pdf(fila_compilacao, nome_base="VadeMecum_Minerado", anos_destaque=None):
+    """Compila o documento em PDF utilizando latexmk ou pdflatex."""
+    if anos_destaque is None:
+        anos_destaque = ["VADE COMPLETO"]
+        
+    codigo_tex = gerar_codigo_latex(fila_compilacao, anos_destaque)
     
-    with open(arquivo_tex, "w", encoding="utf-8") as f:
+    diretorio_temp = tempfile.mkdtemp()
+    caminho_tex = os.path.join(diretorio_temp, f"{nome_base}.tex")
+    caminho_pdf = os.path.join(diretorio_temp, f"{nome_base}.pdf")
+    
+    with open(caminho_tex, "w", encoding="utf-8") as f:
         f.write(codigo_tex)
         
-    comando = [
-        "pdflatex", 
-        "-interaction=nonstopmode", 
-        "-halt-on-error",
-        f"-output-directory={diretorio_atual}", 
-        arquivo_tex
-    ]
-    
     try:
-        compilacao = subprocess.run(
-            comando, 
-            capture_output=True, 
-            text=True, 
-            encoding="utf-8", 
-            errors="ignore", 
-            timeout=50,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        processo = subprocess.run(
+            ["pdflatex", "-interaction=nonstopmode", "-output-directory", diretorio_temp, caminho_tex],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=60
         )
-        
-        if os.path.exists(arquivo_pdf):
-            return "sucesso", arquivo_pdf
-            
-        arquivo_log = os.path.join(diretorio_atual, f"{nome_base}.log")
-        erro_log = ""
-        if os.path.exists(arquivo_log):
-            with open(arquivo_log, "r", encoding="utf-8", errors="ignore") as l:
-                erro_log = "\n".join(l.readlines()[-25:])
-        return "erro", f"LaTeX Log:\n{erro_log}\n\nTerminal Output:\n{compilacao.stdout}"
+        if os.path.exists(caminho_pdf):
+            return "sucesso", caminho_pdf
+        else:
+            return "erro", processo.stdout + "\n" + processo.stderr
     except Exception as e:
-        return "erro", f"Falha crítica no Windows: {str(e)}"
+        return "erro", str(e)
+
+
+def gerar_excel(fila_compilacao, nome_base="VadeMecum_Minerado", anos_destaque=None):
+    """Gera uma planilha Excel (.xlsx) contendo todos os dispositivos estruturados."""
+    if anos_destaque is None:
+        anos_destaque = ["VADE COMPLETO"]
+
+    linhas_excel = []
+
+    for nome_lei, texto_bruto in fila_compilacao:
+        artigos_brutos = parse_texto_legal(texto_bruto)
+        artigos_processados = filtrar_artigos(artigos_brutos, anos_destaque)
+
+        for art in artigos_processados:
+            art_num = art['artigo']['nome']
+            caput_texto = art['artigo']['resto']
+
+            linhas_excel.append({
+                'Diploma Legal': nome_lei,
+                'Artigo': art_num,
+                'Tipo de Dispositivo': 'Caput',
+                'Identificador': art_num,
+                'Texto do Dispositivo': caput_texto
+            })
+
+            for sub in art['conteudo']:
+                linhas_excel.append({
+                    'Diploma Legal': nome_lei,
+                    'Artigo': art_num,
+                    'Tipo de Dispositivo': sub['tipo'].capitalize(),
+                    'Identificador': sub.get('nome', ''),
+                    'Texto do Dispositivo': sub.get('resto', '')
+                })
+
+    if not linhas_excel:
+        return "erro", "Nenhum dado extraído para a planilha Excel."
+
+    df = pd.DataFrame(linhas_excel)
+    diretorio_temp = tempfile.mkdtemp()
+    caminho_xlsx = os.path.join(diretorio_temp, f"{nome_base}.xlsx")
+
+    try:
+        with pd.ExcelWriter(caminho_xlsx, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Dispositivos')
+        return "sucesso", caminho_xlsx
+    except Exception as e:
+        return "erro", str(e)
