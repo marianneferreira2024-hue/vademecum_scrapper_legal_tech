@@ -6,14 +6,13 @@ import formatador
 import re
 import time
 
-# Tenta importar o minerador específico da Constituição, se existente
 try:
     from scraper_constituicao import baixar_constituicao_completa
 except ImportError:
     def baixar_constituicao_completa():
         return formatador.raspar_portal_planalto("https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm")
 
-st.set_page_config(page_title="VADE ATUALIZADO LegalTech", page_icon="⚖️️", layout="wide")
+st.set_page_config(page_title="VADE ATUALIZADO LegalTech", page_icon="⚖", layout="wide")
 
 MAPA_LEIS = {
     "Constituição Federal (1988)": "https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm",
@@ -89,52 +88,39 @@ with col_esquerda:
             lista_final_leis.append(("Texto Manuscrito Injetado", texto_entrada))
 
     st.markdown("---")
-    st.subheader("⚙️ Modo de Compilação")
+    st.subheader("⚙️ Filtro de Destaques por Ano")
 
-    modo_compilacao = st.radio(
-        "Selecione o escopo do documento final:",
-        ["📖 Vade Mecum Completo (Texto Integral)", "✂️ Apenas Atualizações (Recortes por Ano)"],
-        index=0,
-        horizontal=False
-    )
-
-    if modo_compilacao == "✂️ Apenas Atualizações (Recortes por Ano)":
-        col_anos1, col_anos2 = st.columns([2, 1])
+    col_anos1, col_anos2 = st.columns([2, 1])
+    
+    with col_anos1:
+        anos_disponiveis = ["2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027", "VADE COMPLETO"]
+        anos_selecionados = st.multiselect(
+            "Anos a destacar (Selecione 'VADE COMPLETO' para não filtrar):",
+            options=anos_disponiveis,
+            default=["2024", "2025", "2026"]
+        )
         
-        with col_anos1:
-            anos_disponiveis = ["2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027"]
-            anos_selecionados = st.multiselect(
-                "Anos a destacar:",
-                options=anos_disponiveis,
-                default=["2024", "2025", "2026"]
-            )
-            
-        with col_anos2:
-            anos_extras_texto = st.text_input(
-                "Outros anos:",
-                placeholder="Ex: 2018"
-            )
+    with col_anos2:
+        anos_extras_texto = st.text_input(
+            "Outros anos:",
+            placeholder="Ex: 2018"
+        )
 
-        anos_finais = list(anos_selecionados)
-        if anos_extras_texto.strip():
-            anos_extras = re.findall(r'\b\d{4}\b', anos_extras_texto)
-            anos_finais.extend(anos_extras)
+    anos_finais = list(anos_selecionados)
+    if anos_extras_texto.strip():
+        anos_extras = re.findall(r'\b\d{4}\b', anos_extras_texto)
+        anos_finais.extend(anos_extras)
 
-        anos_finais = sorted(list(set(anos_finais)), key=str)
-        
-        if not anos_finais:
-            st.warning("⚠️ Selecione pelo menos um ano para aplicar o recorte de atualizações.")
-        else:
-            st.info(f"✂️ **Modo Atualizações:** O documento conterá apenas artigos alterados em: **{', '.join(anos_finais)}**")
-    else:
-        anos_finais = ["VADE COMPLETO"]
-        st.success("📖 **Modo Vade Mecum Completo:** O documento conterá TODOS os artigos e a estrutura na íntegra, sem cortes por ano.")
+    anos_finais = sorted(list(set(anos_finais)), key=str)
+
+    if "VADE COMPLETO" in anos_finais:
+        st.info("💡 Modo **VADE COMPLETO** ativo: todos os artigos serão incluídos na íntegra.")
 
     st.markdown("---")
 
     if st.button("🚀 Iniciar Coleta e Compilação Automática", use_container_width=True):
         if not anos_finais:
-            st.warning("⚠️ Selecione ao menos um ano ou mude para o modo Vade Mecum Completo.")
+            st.warning("⚠️ Selecione ao menos um ano ou a opção VADE COMPLETO.")
         elif not lista_final_leis:
             st.warning("⚠️ Nenhuma fonte de dados foi selecionada.")
         else:
@@ -176,18 +162,12 @@ with col_esquerda:
                 fila_compilacao = lista_final_leis
 
             if fila_compilacao:
-                with st.spinner("⚙️ Gerando relatórios PDF (LaTeX) e Planilha Excel..."):
+                with st.spinner("⚙️ Gerando relatório PDF (LaTeX)..."):
                     registar_log(f"Iniciando montagem do lote com {len(fila_compilacao)} itens.", "Info")
                     
                     status_pdf, res_pdf = formatador.compilar_pdf(
                         fila_compilacao, 
                         nome_base="VadeMecum_Minerado", 
-                        anos_destaque=anos_finais
-                    )
-                    
-                    status_xls, res_xls = formatador.gerar_excel(
-                        fila_compilacao,
-                        nome_base="VadeMecum_Minerado",
                         anos_destaque=anos_finais
                     )
                     
@@ -199,10 +179,6 @@ with col_esquerda:
                         st.error("🚨 Falha na compilação do PDF.")
                         registar_log("Erro no processo de compilação do LaTeX.", "Erro")
                         st.text_area("Log Técnico de Erros:", value=res_pdf, height=200)
-
-                    if status_xls == "sucesso":
-                        registar_log("Planilha Excel gerada com sucesso.", "Sucesso")
-                        st.session_state["excel_pronto"] = res_xls
             else:
                 st.error("Nenhum texto válido foi coletado para compilação.")
 
@@ -221,19 +197,6 @@ with col_direita:
                 use_container_width=True
             )
 
-    if "excel_pronto" in st.session_state and os.path.exists(st.session_state["excel_pronto"]):
-        caminho_xls = st.session_state["excel_pronto"]
-        with open(caminho_xls, "rb") as f_xls:
-            dados_xls = f_xls.read()
-            st.download_button(
-                label="📊 Descarregar Planilha de Dispositivos (Excel .xlsx)",
-                data=dados_xls,
-                file_name="VadeMecum_Dispositivos.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-
-    if "pdf_pronto" in st.session_state and os.path.exists(st.session_state["pdf_pronto"]):
         base64_pdf = base64.b64encode(dados_pdf).decode('utf-8')
         html_preview = f"""
         <iframe id="pdf-viewer" width="100%" height="580px" style="border:1px solid #64748B; border-radius:8px;"></iframe>
@@ -250,7 +213,7 @@ with col_direita:
                 var blobUrl = URL.createObjectURL(blob);
                 document.getElementById('pdf-viewer').src = blobUrl;
             }} catch(e) {{
-                document.write('<p style="font-family:sans-serif; color:#64748B; font-size:14px;">Utilize os botões acima para transferir os ficheiros.</p>');
+                document.write('<p style="font-family:sans-serif; color:#64748B; font-size:14px;">Utilize o botão acima para transferir o ficheiro.</p>');
             }}
         </script>
         """
