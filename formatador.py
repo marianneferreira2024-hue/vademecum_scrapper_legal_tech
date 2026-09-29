@@ -4,7 +4,6 @@ import subprocess
 import tempfile
 import requests
 from bs4 import BeautifulSoup
-import pandas as pd
 
 def raspar_portal_planalto(url):
     """Realiza a extração do texto HTML do portal do Planalto e converte para texto estruturado."""
@@ -81,7 +80,7 @@ def parse_texto_legal(texto_bruto):
 
 
 def filtrar_artigos(artigos_brutos_totais, anos_destaque=None):
-    """Filtra artigos conforme o modo selecionado (Vade Completo vs Recorte por Anos)."""
+    """Filtra artigos com base nos anos selecionados ou mantém todos se VADE COMPLETO estiver ativo."""
     if not anos_destaque:
         anos_destaque = ['2024', '2025', '2026']
         
@@ -234,7 +233,7 @@ def gerar_codigo_latex(fila_compilacao, anos_destaque):
 
 
 def compilar_pdf(fila_compilacao, nome_base="VadeMecum_Minerado", anos_destaque=None):
-    """Compila o documento em PDF utilizando latexmk ou pdflatex."""
+    """Compila o documento em PDF utilizando pdflatex."""
     if anos_destaque is None:
         anos_destaque = ["VADE COMPLETO"]
         
@@ -259,52 +258,5 @@ def compilar_pdf(fila_compilacao, nome_base="VadeMecum_Minerado", anos_destaque=
             return "sucesso", caminho_pdf
         else:
             return "erro", processo.stdout + "\n" + processo.stderr
-    except Exception as e:
-        return "erro", str(e)
-
-
-def gerar_excel(fila_compilacao, nome_base="VadeMecum_Minerado", anos_destaque=None):
-    """Gera uma planilha Excel (.xlsx) contendo todos os dispositivos estruturados."""
-    if anos_destaque is None:
-        anos_destaque = ["VADE COMPLETO"]
-
-    linhas_excel = []
-
-    for nome_lei, texto_bruto in fila_compilacao:
-        artigos_brutos = parse_texto_legal(texto_bruto)
-        artigos_processados = filtrar_artigos(artigos_brutos, anos_destaque)
-
-        for art in artigos_processados:
-            art_num = art['artigo']['nome']
-            caput_texto = art['artigo']['resto']
-
-            linhas_excel.append({
-                'Diploma Legal': nome_lei,
-                'Artigo': art_num,
-                'Tipo de Dispositivo': 'Caput',
-                'Identificador': art_num,
-                'Texto do Dispositivo': caput_texto
-            })
-
-            for sub in art['conteudo']:
-                linhas_excel.append({
-                    'Diploma Legal': nome_lei,
-                    'Artigo': art_num,
-                    'Tipo de Dispositivo': sub['tipo'].capitalize(),
-                    'Identificador': sub.get('nome', ''),
-                    'Texto do Dispositivo': sub.get('resto', '')
-                })
-
-    if not linhas_excel:
-        return "erro", "Nenhum dado extraído para a planilha Excel."
-
-    df = pd.DataFrame(linhas_excel)
-    diretorio_temp = tempfile.mkdtemp()
-    caminho_xlsx = os.path.join(diretorio_temp, f"{nome_base}.xlsx")
-
-    try:
-        with pd.ExcelWriter(caminho_xlsx, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Dispositivos')
-        return "sucesso", caminho_xlsx
     except Exception as e:
         return "erro", str(e)
